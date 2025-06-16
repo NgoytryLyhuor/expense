@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
@@ -11,7 +12,7 @@ class HomeScreen extends StatefulWidget {
   _HomeScreenState createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with RouteAware {
   String _selectedPeriod = 'Daily';
   List<Map<String, dynamic>> _allTransactions = [];
   List<Map<String, dynamic>> _filteredTransactions = [];
@@ -19,15 +20,152 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _refreshing = false;
   double _totalIncome = 0;
   double _totalSpent = 0;
+  String _userName = 'Lyhuor';
+  String? _userProfileImage; // Add this to store profile image path
 
   final List<String> _periods = ['All', 'Daily', 'Weekly', 'Monthly'];
   final Color _spentColor = const Color(0xFFFEB8A8);
   final Color _incomeColor = const Color(0xFFB6DBAD);
+  final Color _accentColor = const Color(0xFF007AFF);
 
   @override
   void initState() {
     super.initState();
+    _loadUserName();
     _loadTransactions();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload transactions and user name when returning from other screens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadUserName();
+      _loadTransactions();
+    });
+  }
+
+  // Updated method to load both user name and profile image
+  Future<void> _loadUserName() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedSettings = prefs.getString('userSettings');
+      if (savedSettings != null) {
+        final userSettings = jsonDecode(savedSettings);
+        if (mounted) {
+          setState(() {
+            _userName = userSettings['name'] ?? 'User';
+            _userProfileImage = userSettings['profileImage']; // Load profile image
+          });
+        }
+      }
+    } catch (error) {
+      print('Error loading user settings: $error');
+      if (mounted) {
+        setState(() {
+          _userName = 'User';
+          _userProfileImage = null;
+        });
+      }
+    }
+  }
+
+  // Helper method to generate avatar initials
+  String _generateAvatar(String name) {
+    final initials = name.split(' ').map((n) => n.isNotEmpty ? n[0] : '').join().toUpperCase();
+    return initials.isNotEmpty ? initials : 'U';
+  }
+
+  // Helper method to build profile widget
+  Widget _buildProfileWidget() {
+    return GestureDetector(
+      onTap: () {
+        // You can navigate to profile screen here if needed
+        // Navigator.pushNamed(context, '/profile');
+      },
+      child: Container(
+        width: 80,
+        height: 80,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              _accentColor,
+              _accentColor.withOpacity(0.8),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(50),
+          boxShadow: [
+            BoxShadow(
+              color: _accentColor.withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: _userProfileImage != null
+            ? ClipRRect(
+          borderRadius: BorderRadius.circular(50),
+          child: Image.file(
+            File(_userProfileImage!),
+            fit: BoxFit.cover,
+            width: 60,
+            height: 60,
+            errorBuilder: (context, error, stackTrace) {
+              // If image fails to load, show initials
+              return Center(
+                child: Text(
+                  _generateAvatar(_userName),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              );
+            },
+          ),
+        )
+            : Center(
+          child: Text(
+            _generateAvatar(_userName),
+            style: const TextStyle(
+              fontSize: 18,
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _parseColor(String? colorString) {
+    if (colorString == null || colorString.isEmpty) {
+      return _generateLightColor();
+    }
+
+    try {
+      // Remove any leading '#' if present
+      String cleanColor = colorString.replaceAll('#', '');
+
+      // If it's already 8 characters (AARRGGBB), use as is
+      if (cleanColor.length == 8) {
+        return Color(int.parse(cleanColor, radix: 16));
+      }
+      // If it's 6 characters (RRGGBB), add FF prefix for full opacity
+      else if (cleanColor.length == 6) {
+        return Color(int.parse('FF$cleanColor', radix: 16));
+      }
+      // If it's some other length, generate a new color
+      else {
+        return _generateLightColor();
+      }
+    } catch (e) {
+      print('Error parsing color: $colorString, error: $e');
+      return _generateLightColor();
+    }
   }
 
   Color _generateLightColor() {
@@ -39,12 +177,20 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _calculateTotals(List<Map<String, dynamic>> transactions) {
-    final income = transactions
-        .where((t) => t['amount'] > 0)
-        .fold<double>(0, (sum, t) => sum + t['amount']);
-    final spent = transactions
-        .where((t) => t['amount'] < 0)
-        .fold<double>(0, (sum, t) => sum + t['amount'].abs());
+    double income = 0;
+    double spent = 0;
+
+    for (var transaction in transactions) {
+      final amount = transaction['amount'];
+      if (amount is num) {
+        if (amount > 0) {
+          income += amount.toDouble();
+        } else {
+          spent += amount.abs().toDouble();
+        }
+      }
+    }
+
     setState(() {
       _totalIncome = income;
       _totalSpent = spent;
@@ -61,28 +207,43 @@ class _HomeScreenState extends State<HomeScreen> {
     switch (period) {
       case 'Daily':
         return transactions.where((t) {
-          final transactionDate = DateTime.parse(t['date']);
-          final transactionDay =
-          DateTime(transactionDate.year, transactionDate.month, transactionDate.day);
-          return transactionDay == today;
+          try {
+            final transactionDate = DateTime.parse(t['date']);
+            final transactionDay = DateTime(
+                transactionDate.year, transactionDate.month, transactionDate.day);
+            return transactionDay == today;
+          } catch (e) {
+            print('Error parsing date: ${t['date']}');
+            return false;
+          }
         }).toList();
 
       case 'Weekly':
         final weekStart = today.subtract(Duration(days: today.weekday % 7));
         final weekEnd = weekStart.add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59, milliseconds: 999));
         return transactions.where((t) {
-          final transactionDate = DateTime.parse(t['date']);
-          return transactionDate.isAfter(weekStart.subtract(const Duration(microseconds: 1))) &&
-              transactionDate.isBefore(weekEnd.add(const Duration(microseconds: 1)));
+          try {
+            final transactionDate = DateTime.parse(t['date']);
+            return transactionDate.isAfter(weekStart.subtract(const Duration(microseconds: 1))) &&
+                transactionDate.isBefore(weekEnd.add(const Duration(microseconds: 1)));
+          } catch (e) {
+            print('Error parsing date: ${t['date']}');
+            return false;
+          }
         }).toList();
 
       case 'Monthly':
         final monthStart = DateTime(now.year, now.month, 1);
         final monthEnd = DateTime(now.year, now.month + 1, 0, 23, 59, 59, 999);
         return transactions.where((t) {
-          final transactionDate = DateTime.parse(t['date']);
-          return transactionDate.isAfter(monthStart.subtract(const Duration(microseconds: 1))) &&
-              transactionDate.isBefore(monthEnd.add(const Duration(microseconds: 1)));
+          try {
+            final transactionDate = DateTime.parse(t['date']);
+            return transactionDate.isAfter(monthStart.subtract(const Duration(microseconds: 1))) &&
+                transactionDate.isBefore(monthEnd.add(const Duration(microseconds: 1)));
+          } catch (e) {
+            print('Error parsing date: ${t['date']}');
+            return false;
+          }
         }).toList();
 
       default:
@@ -91,23 +252,61 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadTransactions() async {
+    if (!mounted) return;
+
     setState(() => _loading = true);
+
     try {
       final prefs = await SharedPreferences.getInstance();
       final storedTransactions = prefs.getString('transactions');
-      if (storedTransactions != null) {
-        final parsedTransactions = (jsonDecode(storedTransactions) as List)
-            .map((t) => {
-          ...t,
-          'bgColor': t['bgColor'] ?? _generateLightColor().value.toRadixString(16).substring(2),
-        })
-            .toList();
-        setState(() {
-          _allTransactions = parsedTransactions.cast<Map<String, dynamic>>();
-          _filteredTransactions = _filterTransactionsByPeriod(_allTransactions, _selectedPeriod);
-          _calculateTotals(_filteredTransactions);
-        });
+
+      if (storedTransactions != null && storedTransactions.isNotEmpty) {
+        final decodedData = jsonDecode(storedTransactions);
+
+        if (decodedData is List) {
+          final parsedTransactions = decodedData.map((t) {
+            // Ensure all required fields exist with proper types
+            return {
+              'id': t['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+              'category': t['category'] ?? 'Unknown',
+              'amount': (t['amount'] is num) ? t['amount'].toDouble() : 0.0,
+              'date': t['date'] ?? DateTime.now().toIso8601String(),
+              'icon': t['icon'] ?? '💰',
+              'bgColor': t['bgColor'] ?? _generateLightColor().value.toRadixString(16).padLeft(8, '0'),
+              'note': t['note'] ?? '--',
+            };
+          }).toList();
+
+          if (mounted) {
+            setState(() {
+              _allTransactions = parsedTransactions.cast<Map<String, dynamic>>();
+              _filteredTransactions = _filterTransactionsByPeriod(_allTransactions, _selectedPeriod);
+              _calculateTotals(_filteredTransactions);
+            });
+          }
+        } else {
+          if (mounted) {
+            setState(() {
+              _allTransactions = [];
+              _filteredTransactions = [];
+              _totalIncome = 0;
+              _totalSpent = 0;
+            });
+          }
+        }
       } else {
+        if (mounted) {
+          setState(() {
+            _allTransactions = [];
+            _filteredTransactions = [];
+            _totalIncome = 0;
+            _totalSpent = 0;
+          });
+        }
+      }
+    } catch (error) {
+      print('Error loading transactions: $error');
+      if (mounted) {
         setState(() {
           _allTransactions = [];
           _filteredTransactions = [];
@@ -115,18 +314,19 @@ class _HomeScreenState extends State<HomeScreen> {
           _totalSpent = 0;
         });
       }
-    } catch (error) {
-      // ignore: avoid_print
-      print('Error loading transactions: $error');
     } finally {
-      setState(() {
-        _loading = false;
-        _refreshing = false;
-      });
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _refreshing = false;
+        });
+      }
     }
   }
 
   void _handlePeriodChange(String period) {
+    if (!mounted) return;
+
     setState(() {
       _selectedPeriod = period;
       _filteredTransactions = _filterTransactionsByPeriod(_allTransactions, period);
@@ -135,7 +335,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _onRefresh() async {
+    if (!mounted) return;
+
     setState(() => _refreshing = true);
+    await _loadUserName();
     await _loadTransactions();
   }
 
@@ -205,7 +408,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           // Income ring (full circle)
-          Container(
+          SizedBox(
             width: 120,
             height: 120,
             child: CircularProgressIndicator(
@@ -217,7 +420,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           // Spent ring
           if (spentPercentage > 0)
-            Container(
+            SizedBox(
               width: 120,
               height: 120,
               child: CircularProgressIndicator(
@@ -269,17 +472,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
+                    children: [
+                      const Text(
                         'Hello,',
                         style: TextStyle(fontSize: 33, color: Color(0xFF2C3E50)),
                       ),
                       Text(
-                        'Lyhuor',
-                        style: TextStyle(fontSize: 33, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50)),
+                        _userName,
+                        style: const TextStyle(fontSize: 33, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50)),
                       ),
                     ],
                   ),
+                  // Add profile widget to top right
+                  _buildProfileWidget(),
                 ],
               ),
             ),
@@ -303,6 +508,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 )
                     : SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
+                  physics: const AlwaysScrollableScrollPhysics(),
                   child: Column(
                     children: [
                       Container(
@@ -340,8 +546,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     color: _selectedPeriod == period
                                         ? const Color(0xFF2C3E50)
                                         : const Color(0xFF999999),
-                                    fontWeight:
-                                    _selectedPeriod == period ? FontWeight.w600 : FontWeight.normal,
+                                    fontWeight: _selectedPeriod == period ? FontWeight.w600 : FontWeight.normal,
                                   ),
                                 ),
                               ),
@@ -433,67 +638,88 @@ class _HomeScreenState extends State<HomeScreen> {
                               'Recent transactions (${_selectedPeriod.toLowerCase()})',
                               style: const TextStyle(fontSize: 16, color: Color(0xFF999999)),
                             ),
-                            GestureDetector(
-                              onTap: () => Navigator.pushNamed(context, '/transfer'),
-                              child: const Text(
-                                'See All →',
-                                style: TextStyle(fontSize: 14, color: Color(0xFF007AFF)),
-                              ),
-                            ),
                           ],
                         ),
                       ),
-                      _loading
-                          ? const Center(
-                        child: Column(
-                          children: [
-                            CircularProgressIndicator(color: Color(0xFF007AFF)),
-                            SizedBox(height: 10),
-                            Text(
-                              'Loading transactions...',
-                              style: TextStyle(fontSize: 16, color: Color(0xFF666666)),
-                            ),
-                          ],
+                      _filteredTransactions.isEmpty
+                          ? Container(
+                        padding: const EdgeInsets.all(40),
+                        child: Text(
+                          'No transactions available for ${_selectedPeriod.toLowerCase()} period',
+                          style: const TextStyle(fontSize: 16, color: Color(0xFF999999)),
+                          textAlign: TextAlign.center,
                         ),
-                      )
-                          : _filteredTransactions.isEmpty
-                          ? Text(
-                        'No transactions available for ${_selectedPeriod.toLowerCase()} period',
-                        style: const TextStyle(fontSize: 16, color: Color(0xFF999999)),
-                        textAlign: TextAlign.center,
                       )
                           : Column(
                         children: _filteredTransactions.reversed.map((transaction) {
                           return Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            decoration: const BoxDecoration(
-                              border: Border(bottom: BorderSide(color: Color(0xFFF8F8FA))),
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.grey.withOpacity(0.1),
+                                  spreadRadius: 1,
+                                  blurRadius: 3,
+                                  offset: Offset(0, 1),
+                                ),
+                              ],
                             ),
+                            margin: EdgeInsets.only(bottom: 8),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Row(
-                                  children: [
-                                    Container(
-                                      width: 50,
-                                      height: 50,
-                                      decoration: BoxDecoration(
-                                        color: Color(int.parse('FF${transaction['bgColor']}', radix: 16)),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Center(
-                                        child: Text(
-                                          transaction['icon'],
-                                          style: const TextStyle(fontSize: 20),
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 48,
+                                        height: 48,
+                                        decoration: BoxDecoration(
+                                          color: _parseColor(transaction['bgColor']),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            transaction['icon'],
+                                            style: const TextStyle(fontSize: 20),
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Text(
-                                      transaction['category'],
-                                      style: const TextStyle(fontSize: 16, color: Color(0xFF2C3E50)),
-                                    ),
-                                  ],
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              transaction['category'],
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w400,
+                                                color: Color(0xFF2C3E50),
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            if (transaction['note'] != null && transaction['note'].isNotEmpty)
+                                              Padding(
+                                                padding: const EdgeInsets.only(top: 4),
+                                                child: Text(
+                                                  transaction['note'],
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    color: Color(0xFF515A70).withOpacity(0.8),
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -501,14 +727,18 @@ class _HomeScreenState extends State<HomeScreen> {
                                     Text(
                                       '${transaction['amount'] > 0 ? '+' : '-'}\$${transaction['amount'].abs().toStringAsFixed(2)}',
                                       style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
                                         color: transaction['amount'] > 0 ? _incomeColor : _spentColor,
                                       ),
                                     ),
+                                    const SizedBox(height: 4),
                                     Text(
-                                      DateFormat.yMd().format(DateTime.parse(transaction['date'])),
-                                      style: const TextStyle(fontSize: 12, color: Color(0xFF999999)),
+                                      DateFormat.MMMd().format(DateTime.parse(transaction['date'])),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF999999),
+                                      ),
                                     ),
                                   ],
                                 ),

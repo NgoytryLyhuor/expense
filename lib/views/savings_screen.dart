@@ -1,234 +1,485 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
-class WalletScreen extends StatefulWidget {
-  const WalletScreen({super.key});
+class SavingsScreen extends StatefulWidget {
+  const SavingsScreen({super.key});
 
   @override
-  _WalletScreenState createState() => _WalletScreenState();
+  State<SavingsScreen> createState() => _SavingsScreenState();
 }
 
-class _WalletScreenState extends State<WalletScreen> {
-  bool _loading = true;
-  bool _refreshing = false;
-  int _selectedCard = 0;
-  double _totalBalance = 0;
+class _SavingsScreenState extends State<SavingsScreen> {
+  List<Map<String, dynamic>> _savingsGoals = [];
+  bool _isLoading = true;
 
-  // Color palette matching HomeScreen
+  // Colors matching HomeScreen exactly
   final Color _primaryColor = const Color(0xFF2C3E50);
-  final Color _secondaryColor = const Color(0xFF999999);
-  final Color _accentColor = const Color(0xFF007AFF);
+  final Color _secondaryColor = const Color(0xFF95A5A6);
   final Color _backgroundColor = const Color(0xFFFEFEFF);
-  final Color _surfaceColor = const Color(0xFFFFFFFF);
   final Color _cardColor = const Color(0xFFF8F8FA);
-  final Color _borderColor = const Color(0xFFF0F0F0);
-  final Color _successColor = const Color(0xFF4CAF50);
+  final Color _accentColor = const Color(0xFF007AFF);
+  final Color _incomeColor = const Color(0xFFB6DBAD);
+  final Color _spentColor = const Color(0xFFFEB8A8);
+  final Color _successColor = const Color(0xFF10B981);
+  final Color _warningColor = const Color(0xFFF59E0B);
+  final Color _errorColor = const Color(0xFFEF4444);
 
-  List<Map<String, dynamic>> _walletCards = [];
+  // Goal colors matching HomeScreen aesthetic
+  final List<Color> _goalColors = [
+    const Color(0xFFB6DBAD), // Matching income green
+    const Color(0xFFA8C7EB), // Soft blue
+    const Color(0xFFFEB8A8), // Matching spent color
+    const Color(0xFFF5D7A1), // Soft yellow
+    const Color(0xFFD4B8F5), // Soft purple
+  ];
 
   @override
   void initState() {
     super.initState();
-    _loadWalletData();
+    _loadSavingsGoals();
   }
 
-  Future<void> _loadWalletData() async {
-    setState(() => _loading = true);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final storedWallets = prefs.getString('wallets');
+  Future<void> _loadSavingsGoals() async {
+    setState(() => _isLoading = true);
+    final prefs = await SharedPreferences.getInstance();
+    final savedGoals = prefs.getString('savings_goals');
 
-      if (storedWallets != null && storedWallets.isNotEmpty) {
-        final decodedData = jsonDecode(storedWallets);
-
-        if (decodedData is List) {
-          final parsedWallets = decodedData.map((w) {
-            return {
-              'id': w['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
-              'type': w['type'] ?? 'Wallet',
-              'balance': (w['balance'] is num) ? w['balance'].toDouble() : 0.0,
-              'cardNumber': w['cardNumber'] ?? '•••• •••• •••• ••••',
-              'gradient': _parseGradient(w['gradient']),
-              'icon': _parseIcon(w['icon']),
-            };
-          }).toList();
-
-          setState(() {
-            _walletCards = parsedWallets.cast<Map<String, dynamic>>();
-            _totalBalance = _walletCards.fold<double>(0, (sum, card) => sum + card['balance']);
-          });
-        }
-      } else {
-        // Default wallets if none exist
-        setState(() {
-          _walletCards = [
-            {
-              'id': 1,
-              'type': 'Main Wallet',
-              'balance': 2450.75,
-              'cardNumber': '•••• •••• •••• 1234',
-              'gradient': [const Color(0xFF007AFF), const Color(0xFF00B4FF)],
-              'icon': Icons.account_balance_wallet_rounded
-            },
-            {
-              'id': 2,
-              'type': 'Savings',
-              'balance': 8920.50,
-              'cardNumber': '•••• •••• •••• 5678',
-              'gradient': [const Color(0xFF4CAF50), const Color(0xFF8BC34A)],
-              'icon': Icons.savings_rounded
-            },
-            {
-              'id': 3,
-              'type': 'Business',
-              'balance': 15670.25,
-              'cardNumber': '•••• •••• •••• 9012',
-              'gradient': [const Color(0xFF9C27B0), const Color(0xFFE91E63)],
-              'icon': Icons.business_center_rounded
-            },
-          ];
-          _totalBalance = _walletCards.fold<double>(0, (sum, card) => sum + card['balance']);
-        });
-      }
-    } catch (error) {
-      debugPrint('Error loading wallet data: $error');
-    } finally {
+    if (savedGoals != null) {
+      final List<dynamic> decoded = jsonDecode(savedGoals);
       setState(() {
-        _loading = false;
-        _refreshing = false;
+        _savingsGoals = decoded.map((goal) {
+          return {
+            'id': goal['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+            'title': goal['title'],
+            'target': goal['target']?.toDouble() ?? 0.0,
+            'saved': goal['saved']?.toDouble() ?? 0.0,
+            'color': Color(goal['color'] ?? _goalColors[0].value),
+            'icon': goal['icon'] ?? '💰',
+            'deadline': DateTime.parse(goal['deadline']),
+            'createdAt': DateTime.parse(goal['createdAt']),
+          };
+        }).toList();
       });
     }
+    setState(() => _isLoading = false);
   }
 
-  List<Color> _parseGradient(dynamic gradientData) {
-    if (gradientData is List && gradientData.length >= 2) {
-      try {
-        return [
-          Color(int.parse(gradientData[0].toString().replaceAll('#', ''), radix: 16)),
-          Color(int.parse(gradientData[1].toString().replaceAll('#', ''), radix: 16))
-        ];
-      } catch (e) {
-        debugPrint('Error parsing gradient: $e');
-      }
+  Future<void> _saveGoals() async {
+    final prefs = await SharedPreferences.getInstance();
+    final goalsToSave = _savingsGoals.map((goal) {
+      return {
+        'id': goal['id'],
+        'title': goal['title'],
+        'target': goal['target'],
+        'saved': goal['saved'],
+        'color': (goal['color'] as Color).value,
+        'icon': goal['icon'],
+        'deadline': (goal['deadline'] as DateTime).toIso8601String(),
+        'createdAt': (goal['createdAt'] as DateTime).toIso8601String(),
+      };
+    }).toList();
+    await prefs.setString('savings_goals', jsonEncode(goalsToSave));
+  }
+
+  Future<void> _addOrUpdateGoal(Map<String, dynamic> goal, [bool isUpdate = false]) async {
+    if (isUpdate && goal['id'] != null) {
+      setState(() {
+        final index = _savingsGoals.indexWhere((g) => g['id'] == goal['id']);
+        if (index != -1) {
+          _savingsGoals[index] = goal;
+        }
+      });
+    } else {
+      setState(() {
+        _savingsGoals.add({
+          ...goal,
+          'id': DateTime.now().millisecondsSinceEpoch.toString(),
+          'createdAt': DateTime.now(),
+        });
+      });
     }
-    // Default gradient if parsing fails
-    return [const Color(0xFF007AFF), const Color(0xFF00B4FF)];
+    await _saveGoals();
+    if (mounted) Navigator.pop(context);
   }
 
-  IconData _parseIcon(dynamic iconData) {
-    if (iconData is IconData) {
-      return iconData;
-    }
-    // Default icon if parsing fails
-    return Icons.account_balance_wallet_rounded;
+  Future<void> _deleteGoal(String id) async {
+    setState(() {
+      _savingsGoals.removeWhere((goal) => goal['id'] == id);
+    });
+    await _saveGoals();
   }
 
-  Future<void> _onRefresh() async {
-    setState(() => _refreshing = true);
-    await _loadWalletData();
-  }
+  Future<void> _showAddEditGoalDialog([Map<String, dynamic>? existingGoal]) async {
+    final isEdit = existingGoal != null;
+    final titleController = TextEditingController(text: isEdit ? existingGoal['title'] : '');
+    final targetController = TextEditingController(
+        text: isEdit ? existingGoal['target'].toStringAsFixed(2) : '');
+    final savedController = TextEditingController(
+        text: isEdit ? existingGoal['saved'].toStringAsFixed(2) : '0.00');
+    DateTime deadline = isEdit ? existingGoal['deadline'] : DateTime.now().add(const Duration(days: 30));
+    String icon = isEdit ? existingGoal['icon'] : '💰';
+    Color selectedColor = isEdit ? existingGoal['color'] : _goalColors[0];
 
-  void _handleCardPress(int index) {
-    setState(() => _selectedCard = index);
-  }
-
-  Widget _buildWalletCard(Map<String, dynamic> card, bool isSelected, VoidCallback onPress) {
-    return GestureDetector(
-      onTap: onPress,
-      child: Container(
-        width: MediaQuery.of(context).size.width * 0.75,
-        margin: const EdgeInsets.only(right: 16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isSelected ? 0.15 : 0.05),
-              blurRadius: isSelected ? 12 : 6,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: card['gradient'],
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, dialogSetState) {
+            return Dialog(
+              backgroundColor: _backgroundColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
               ),
-            ),
-            height: 180,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
+                    Text(
+                      isEdit ? 'Edit Goal' : 'Add New Goal',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: _primaryColor,
                       ),
-                      child: Center(
-                        child: Icon(
-                          card['icon'],
+                    ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: titleController,
+                      decoration: InputDecoration(
+                        labelText: 'Goal Name',
+                        labelStyle: TextStyle(color: _secondaryColor),
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: targetController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Target Amount',
+                        prefixText: '\$ ',
+                        labelStyle: TextStyle(color: _secondaryColor),
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: savedController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Amount Saved',
+                        prefixText: '\$ ',
+                        labelStyle: TextStyle(color: _secondaryColor),
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    InkWell(
+                      onTap: () async {
+                        final pickedDate = await showDatePicker(
+                          context: context,
+                          initialDate: deadline,
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                          builder: (context, child) {
+                            return Theme(
+                              data: Theme.of(context).copyWith(
+                                colorScheme: ColorScheme.light(
+                                  primary: _accentColor,
+                                  onPrimary: Colors.white,
+                                  surface: Colors.white,
+                                  onSurface: _primaryColor,
+                                ),
+                              ),
+                              child: child!,
+                            );
+                          },
+                        );
+                        if (pickedDate != null) {
+                          dialogSetState(() => deadline = pickedDate);
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
                           color: Colors.white,
-                          size: 24,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Deadline',
+                              style: TextStyle(color: _secondaryColor),
+                            ),
+                            Text(
+                              DateFormat('MMM dd, yyyy').format(deadline),
+                              style: TextStyle(
+                                  color: _primaryColor,
+                                  fontWeight: FontWeight.w500),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Text(
-                      card['type'],
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    const SizedBox(height: 16),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Select Icon',
+                          style: TextStyle(
+                            color: _secondaryColor,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          height: 60,
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            children: ['💰', '🏠', '🚗', '🎓', '🏖️', '💻', '📱', '👕', '🍎', '✈️']
+                                .map((emoji) => GestureDetector(
+                              onTap: () => dialogSetState(() => icon = emoji),
+                              child: Container(
+                                margin: const EdgeInsets.only(right: 8),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: icon == emoji
+                                      ? selectedColor.withOpacity(0.2)
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: icon == emoji
+                                      ? Border.all(
+                                      color: selectedColor, width: 2)
+                                      : Border.all(
+                                      color: Colors.grey.withOpacity(0.2)),
+                                ),
+                                child: Text(
+                                  emoji,
+                                  style: const TextStyle(fontSize: 24),
+                                ),
+                              ),
+                            ))
+                                .toList(),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Select Color',
+                          style: TextStyle(
+                            color: _secondaryColor,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          height: 50,
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            children: _goalColors
+                                .map((color) => GestureDetector(
+                              onTap: () =>
+                                  dialogSetState(() => selectedColor = color),
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                margin: const EdgeInsets.only(right: 8),
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  shape: BoxShape.circle,
+                                  border: selectedColor == color
+                                      ? Border.all(
+                                    color: _accentColor,
+                                    width: 3,
+                                  )
+                                      : Border.all(
+                                    color: Colors.grey
+                                        .withOpacity(0.2),
+                                    width: 1,
+                                  ),
+                                ),
+                              ),
+                            ))
+                                .toList(),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(color: _secondaryColor),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              if (titleController.text.trim().isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text('Please enter a goal name')),
+                                );
+                                return;
+                              }
+
+                              final targetAmount =
+                                  double.tryParse(targetController.text) ?? 0.0;
+                              final savedAmount =
+                                  double.tryParse(savedController.text) ?? 0.0;
+
+                              if (targetAmount <= 0) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content:
+                                      Text('Please enter a valid target amount')),
+                                );
+                                return;
+                              }
+
+                              final newGoal = {
+                                'title': titleController.text.trim(),
+                                'target': targetAmount,
+                                'saved': savedAmount,
+                                'color': selectedColor,
+                                'icon': icon,
+                                'deadline': deadline,
+                                if (isEdit) 'id': existingGoal['id'],
+                                if (isEdit) 'createdAt': existingGoal['createdAt'],
+                              };
+                              _addOrUpdateGoal(newGoal, isEdit);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _accentColor,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: Text(
+                              isEdit ? 'Update' : 'Add',
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Available Balance',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.white.withOpacity(0.8),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '\$${NumberFormat.currency(locale: 'en_US', symbol: '', decimalDigits: 2).format(card['balance'])}',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                Text(
-                  card['cardNumber'],
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.white.withOpacity(0.8),
-                    letterSpacing: 1,
-                  ),
-                ),
-              ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showDeleteConfirmation(String id, String title) async {
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: _backgroundColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Text(
+          'Delete Goal?',
+          style: TextStyle(color: _primaryColor),
+        ),
+        content: Text(
+          'Are you sure you want to delete "$title"?',
+          style: TextStyle(color: _secondaryColor),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: _secondaryColor),
             ),
           ),
-        ),
+          ElevatedButton(
+            onPressed: () {
+              _deleteGoal(id);
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _errorColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
+  }
+
+  double _calculateTotalSaved() {
+    return _savingsGoals.fold(
+        0.0, (sum, goal) => sum + (goal['saved'] as double));
+  }
+
+  double _calculateTotalTarget() {
+    return _savingsGoals.fold(
+        0.0, (sum, goal) => sum + (goal['target'] as double));
+  }
+
+  double _calculateTotalProgress() {
+    final totalSaved = _calculateTotalSaved();
+    final totalTarget = _calculateTotalTarget();
+    return totalTarget > 0 ? totalSaved / totalTarget : 0;
+  }
+
+  String _calculateDaysLeft(DateTime deadline) {
+    final days = deadline.difference(DateTime.now()).inDays;
+    return days > 0 ? '$days days left' : 'Overdue';
   }
 
   @override
@@ -238,70 +489,72 @@ class _WalletScreenState extends State<WalletScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            // Header Section
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'My Wallet',
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w800,
-                          color: _primaryColor,
-                          letterSpacing: -0.5,
-                        ),
+                        'Savings Goals',
+                        style: TextStyle(fontSize: 33, color: Color(0xFF2C3E50)),
                       ),
+                      const SizedBox(height: 4),
                       Text(
-                        'Manage your finances',
+                        'Track your financial goals',
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 14,
                           color: _secondaryColor,
                         ),
                       ),
                     ],
                   ),
+                  IconButton(
+                    icon: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: _accentColor.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.add,
+                        color: _accentColor,
+                      ),
+                    ),
+                    onPressed: () => _showAddEditGoalDialog(),
+                  ),
                 ],
               ),
             ),
+            const SizedBox(height: 20),
+
+            // Content Section
             Expanded(
-              child: RefreshIndicator(
-                onRefresh: _onRefresh,
+              child: _isLoading
+                  ? Center(
+                child: CircularProgressIndicator(color: _accentColor),
+              )
+                  : RefreshIndicator(
+                onRefresh: _loadSavingsGoals,
                 color: _accentColor,
-                child: _loading
-                    ? const Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      CircularProgressIndicator(color: Color(0xFF007AFF)),
-                      SizedBox(height: 10),
-                      Text(
-                        'Loading...',
-                        style: TextStyle(fontSize: 16, color: Color(0xFF666666)),
-                      ),
-                    ],
-                  ),
-                )
-                    : SingleChildScrollView(
+                child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
+                  physics: const AlwaysScrollableScrollPhysics(),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Total Balance Card
+                      // Total Savings Card
                       Container(
-                        padding: const EdgeInsets.all(24),
-                        margin: const EdgeInsets.only(bottom: 24),
+                        padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: _surfaceColor,
+                          color: _cardColor,
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withOpacity(0.05),
-                              blurRadius: 8,
+                              blurRadius: 10,
                               offset: const Offset(0, 4),
                             ),
                           ],
@@ -309,46 +562,57 @@ class _WalletScreenState extends State<WalletScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            Text(
+                              'Total Savings',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: _secondaryColor,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '\$${_calculateTotalSaved().toStringAsFixed(2)} of \$${_calculateTotalTarget().toStringAsFixed(2)}',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: _primaryColor,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              height: 6,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(3),
+                                child: LinearProgressIndicator(
+                                  value: _calculateTotalProgress().clamp(0.0, 1.0),
+                                  backgroundColor: Colors.grey.withOpacity(0.1),
+                                  valueColor: AlwaysStoppedAnimation<Color>(_accentColor),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  'Total Balance',
+                                  '${(_calculateTotalProgress() * 100).toStringAsFixed(1)}%',
                                   style: TextStyle(
                                     fontSize: 14,
                                     color: _secondaryColor,
                                   ),
                                 ),
-                                Icon(
-                                  Icons.visibility_outlined,
-                                  color: _secondaryColor,
-                                  size: 18,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '\$${NumberFormat.currency(locale: 'en_US', symbol: '', decimalDigits: 2).format(_totalBalance)}',
-                              style: TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.w700,
-                                color: _primaryColor,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.trending_up_rounded,
-                                  color: _successColor,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 6),
                                 Text(
-                                  '+2.5% from last month',
+                                  _calculateTotalSaved() >= _calculateTotalTarget()
+                                      ? 'Goal Achieved! 🎉'
+                                      : 'Remaining: \$${(_calculateTotalTarget() - _calculateTotalSaved()).toStringAsFixed(2)}',
                                   style: TextStyle(
                                     fontSize: 14,
-                                    color: _successColor,
+                                    color: _calculateTotalSaved() >= _calculateTotalTarget()
+                                        ? _successColor
+                                        : _secondaryColor,
+                                    fontWeight: _calculateTotalSaved() >= _calculateTotalTarget()
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
                                   ),
                                 ),
                               ],
@@ -356,33 +620,233 @@ class _WalletScreenState extends State<WalletScreen> {
                           ],
                         ),
                       ),
+                      const SizedBox(height: 24),
 
-                      // Your Cards Section
-                      Text(
-                        'Your Cards',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: _primaryColor,
+                      // Goals List Header
+                      if (_savingsGoals.isNotEmpty)
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Your Goals',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: _primaryColor,
+                              ),
+                            ),
+                            Text(
+                              '${_savingsGoals.length} ${_savingsGoals.length == 1 ? 'goal' : 'goals'}',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: _secondaryColor,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
                       const SizedBox(height: 16),
-                      SizedBox(
-                        height: 180,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: _walletCards.length,
-                          itemBuilder: (context, index) {
-                            final card = _walletCards[index];
-                            final isSelected = _selectedCard == index;
-                            return _buildWalletCard(
-                              card,
-                              isSelected,
-                                  () => _handleCardPress(index),
-                            );
-                          },
-                        ),
-                      ),
+
+                      // Goals List or Empty State
+                      if (_savingsGoals.isEmpty)
+                        Container(
+                          padding: const EdgeInsets.all(40),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.savings_outlined,
+                                size: 60,
+                                color: _secondaryColor.withOpacity(0.3),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No savings goals yet',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: _primaryColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Tap the + button to create your first goal',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: _secondaryColor,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        ..._savingsGoals.map((goal) {
+                          final progress = (goal['target'] as double) > 0
+                              ? (goal['saved'] as double) / (goal['target'] as double)
+                              : 0.0;
+                          final daysLeft = _calculateDaysLeft(goal['deadline']);
+                          final isOverdue = daysLeft == 'Overdue';
+                          final isCompleted = progress >= 1.0;
+
+                          return Dismissible(
+                            key: Key(goal['id']),
+                            direction: DismissDirection.endToStart,
+                            background: Container(
+                              margin: const EdgeInsets.only(bottom: 16),
+                              decoration: BoxDecoration(
+                                color: _errorColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              alignment: Alignment.centerRight,
+                              padding: const EdgeInsets.only(right: 20),
+                              child: Icon(Icons.delete, color: _errorColor),
+                            ),
+                            confirmDismiss: (direction) async {
+                              await _showDeleteConfirmation(
+                                  goal['id'], goal['title']);
+                              return false;
+                            },
+                            child: GestureDetector(
+                              onTap: () => _showAddEditGoalDialog(goal),
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 16),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: _cardColor,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          width: 48,
+                                          height: 48,
+                                          decoration: BoxDecoration(
+                                            color: goal['color'],
+                                            borderRadius:
+                                            BorderRadius.circular(12),
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              goal['icon'],
+                                              style:
+                                              const TextStyle(fontSize: 24),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                goal['title'],
+                                                style: TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: _primaryColor,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                'Target: \$${(goal['target'] as double).toStringAsFixed(2)}',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: _secondaryColor,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Column(
+                                          crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                          children: [
+                                            Text(
+                                              '\$${(goal['saved'] as double).toStringAsFixed(2)}',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
+                                                color: isCompleted
+                                                    ? _successColor
+                                                    : _primaryColor,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              daysLeft,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: isOverdue
+                                                    ? _errorColor
+                                                    : isCompleted
+                                                    ? _successColor
+                                                    : _secondaryColor,
+                                                fontWeight: isOverdue
+                                                    ? FontWeight.bold
+                                                    : FontWeight.normal,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    SizedBox(
+                                      height: 6,
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(3),
+                                        child: LinearProgressIndicator(
+                                          value: progress.clamp(0.0, 1.0),
+                                          backgroundColor: Colors.grey.withOpacity(0.1),
+                                          valueColor: AlwaysStoppedAnimation<Color>(goal['color']),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          '${(progress * 100).toStringAsFixed(1)}%',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: _secondaryColor,
+                                          ),
+                                        ),
+                                        Text(
+                                          isCompleted
+                                              ? 'Completed! 🎉'
+                                              : 'Remaining: \$${(goal['target'] - goal['saved']).toStringAsFixed(2)}',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: isCompleted
+                                                ? _successColor
+                                                : _secondaryColor,
+                                            fontWeight: isCompleted
+                                                ? FontWeight.bold
+                                                : FontWeight.normal,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      const SizedBox(height: 20),
                     ],
                   ),
                 ),

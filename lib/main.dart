@@ -2,35 +2,119 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 // Import screens
-import './views/welcome_screen.dart';
 import './views/home_screen.dart';
-import './views/transfer_screen.dart';
+import './views/transactions_screen.dart';
 import './views/add_expense_screen.dart';
-import './views/wallet_screen.dart';
+import './views/savings_screen.dart';
 import './views/profile_screen.dart';
+import 'auth_screen.dart';
+import './views/welcome_screen.dart'; // Add this import
 
 void main() {
+  // Set system UI overlay style globally before running the app
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.white,
+      statusBarBrightness: Brightness.light,
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.white,
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ),
+  );
+
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  bool _isAuthenticated = false;
+  bool _hasBeenAuthenticated = false;
+  bool _needsReAuth = false;
+  bool _showWelcome = true; // Add this flag
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      if (_hasBeenAuthenticated) {
+        setState(() {
+          _needsReAuth = true;
+          _isAuthenticated = false;
+        });
+      }
+    }
+  }
+
+  void _onAuthenticationSuccess() {
+    setState(() {
+      _isAuthenticated = true;
+      _hasBeenAuthenticated = true;
+      _needsReAuth = false;
+    });
+  }
+
+  void _onWelcomeComplete() {
+    setState(() {
+      _showWelcome = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Expense App',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.blue,
+        scaffoldBackgroundColor: Colors.white,
         visualDensity: VisualDensity.adaptivePlatformDensity,
-        // Remove default app bar theme for custom styling
         appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
+          backgroundColor: Colors.white,
           elevation: 0,
-          systemOverlayStyle: SystemUiOverlayStyle.dark,
+          centerTitle: false,
+          titleTextStyle: TextStyle(
+            color: Colors.black,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+          iconTheme: IconThemeData(color: Colors.black),
+          systemOverlayStyle: SystemUiOverlayStyle(
+            statusBarColor: Colors.white,
+            statusBarBrightness: Brightness.light,
+            statusBarIconBrightness: Brightness.dark,
+          ),
+        ),
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: CustomPageTransitionBuilder(),
+            TargetPlatform.iOS: CustomPageTransitionBuilder(),
+          },
         ),
       ),
-      home: const WelcomeScreen(),
+      home: _showWelcome
+          ? WelcomeScreen(onComplete: _onWelcomeComplete)
+          : (_isAuthenticated && !_needsReAuth
+          ? const MainTabNavigator()
+          : AuthScreen(onAuthSuccess: _onAuthenticationSuccess)),
       routes: {
         '/main': (context) => const MainTabNavigator(),
       },
@@ -38,7 +122,82 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// Custom Tab Bar Widget
+class CustomPageTransitionBuilder extends PageTransitionsBuilder {
+  const CustomPageTransitionBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+      PageRoute<T> route,
+      BuildContext context,
+      Animation<double> animation,
+      Animation<double> secondaryAnimation,
+      Widget child,
+      ) {
+    // Special transition for auth to home
+    if (route.settings.name == '/main' || route is MaterialPageRoute) {
+      return AuthToHomeTransition(
+        animation: animation,
+        child: child,
+      );
+    }
+
+    // Default transition for other routes
+    return FadeTransition(
+      opacity: animation,
+      child: child,
+    );
+  }
+}
+
+class AuthToHomeTransition extends StatelessWidget {
+  final Animation<double> animation;
+  final Widget child;
+
+  const AuthToHomeTransition({
+    super.key,
+    required this.animation,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final curvedAnimation = CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeInOutCubic,
+    );
+
+    return SlideTransition(
+      position: Tween<Offset>(
+        begin: const Offset(0, 0.05),
+        end: Offset.zero,
+      ).animate(curvedAnimation),
+      child: FadeTransition(
+        opacity: Tween<double>(
+          begin: 0.8,
+          end: 1.0,
+        ).animate(
+          CurvedAnimation(
+            parent: animation,
+            curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
+          ),
+        ),
+        child: ScaleTransition(
+          scale: Tween<double>(
+            begin: 0.98,
+            end: 1.0,
+          ).animate(
+            CurvedAnimation(
+              parent: animation,
+              curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
+            ),
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
 class CustomTabBar extends StatelessWidget {
   final int currentIndex;
   final Function(int) onTap;
@@ -52,7 +211,7 @@ class CustomTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 80,
+      height: 90,
       decoration: BoxDecoration(
         color: const Color(0xFFF8F8FA),
         boxShadow: [
@@ -64,17 +223,14 @@ class CustomTabBar extends StatelessWidget {
         ],
       ),
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-          child: Row(
-            children: [
-              _buildTabItem(0, 'Home', Icons.home_outlined, Icons.home),
-              _buildTabItem(1, 'Transfer', Icons.swap_horiz_outlined, Icons.swap_horiz),
-              _buildAddButton(),
-              _buildTabItem(3, 'Wallet', Icons.account_balance_wallet_outlined, Icons.account_balance_wallet),
-              _buildTabItem(4, 'Profile', Icons.person_outline, Icons.person),
-            ],
-          ),
+        child: Row(
+          children: [
+            _buildTabItem(0, 'Home', Icons.home_outlined, Icons.home),
+            _buildTabItem(1, 'Transactions', Icons.swap_horiz_outlined, Icons.swap_horiz),
+            _buildAddButton(),
+            _buildTabItem(3, 'Savings', Icons.savings_outlined, Icons.savings),
+            _buildTabItem(4, 'Profile', Icons.person_outline, Icons.person),
+          ],
         ),
       ),
     );
@@ -88,24 +244,39 @@ class CustomTabBar extends StatelessWidget {
       child: GestureDetector(
         onTap: () => onTap(index),
         behavior: HitTestBehavior.opaque,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              isSelected ? activeIcon : inactiveIcon,
-              size: 20,
-              color: color,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: color,
+        child: SizedBox(
+          height: double.infinity,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: Icon(
+                  isSelected ? activeIcon : inactiveIcon,
+                  key: ValueKey(isSelected),
+                  size: 20,
+                  color: color,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Flexible(
+                child: AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 200),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: color,
+                  ),
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -115,67 +286,78 @@ class CustomTabBar extends StatelessWidget {
     return Expanded(
       child: GestureDetector(
         onTap: () => onTap(2),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            Container(
-              width: 90,
-              height: 90,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFEFEFF).withOpacity(0.8),
-                borderRadius: BorderRadius.circular(45),
-              ),
-              child: Center(
-                child: Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFB7DBAF),
-                    borderRadius: BorderRadius.circular(35),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFB7DBAF).withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.add,
-                    size: 24,
-                    color: Colors.black,
-                  ),
+        child: SizedBox(
+          height: double.infinity,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFB7DBAF),
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFB7DBAF).withOpacity(0.4),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.add,
+                  size: 28,
+                  color: Colors.black,
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-// Main Tab Navigator (equivalent to TabNavigator in React Native)
 class MainTabNavigator extends StatefulWidget {
-  const MainTabNavigator({super.key});
+  final int initialIndex;
+
+  const MainTabNavigator({
+    super.key,
+    this.initialIndex = 0,
+  });
 
   @override
   State<MainTabNavigator> createState() => _MainTabNavigatorState();
 }
 
 class _MainTabNavigatorState extends State<MainTabNavigator> {
-  int _selectedIndex = 0;
+  late int _selectedIndex;
 
-  // List of screens for navigation
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = widget.initialIndex;
+  }
+
   static const List<Widget> _screens = <Widget>[
     HomeScreen(),
-    TransferScreen(),
-    AddExpenseScreen(),
-    WalletScreen(),
+    TransactionsScreen(),
+    SizedBox(), // Placeholder for AddExpenseScreen
+    SavingsScreen(),
     ProfileScreen(),
   ];
 
-  void _onItemTapped(int index) {
+  void changeTab(int index) {
+    if (index == 2) {
+      Navigator.push(
+        context,
+        SlideUpPageRoute(child: const AddExpenseScreen()),
+      );
+      return;
+    }
+
     setState(() {
       _selectedIndex = index;
     });
@@ -184,36 +366,78 @@ class _MainTabNavigatorState extends State<MainTabNavigator> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _screens,
+      backgroundColor: Colors.white,
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        transitionBuilder: (Widget child, Animation<double> animation) {
+          return FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.98, end: 1.0).animate(
+                CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOut,
+                ),
+              ),
+              child: child,
+            ),
+          );
+        },
+        child: Container(
+          key: ValueKey<int>(_selectedIndex),
+          child: _screens[_selectedIndex],
+        ),
       ),
       bottomNavigationBar: CustomTabBar(
         currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
+        onTap: changeTab,
       ),
     );
   }
 }
 
-// Custom Page Route for horizontal slide animation (iOS-style)
-class HorizontalSlidePageRoute<T> extends PageRouteBuilder<T> {
+class SlideUpPageRoute<T> extends PageRouteBuilder<T> {
   final Widget child;
 
-  HorizontalSlidePageRoute({required this.child})
+  SlideUpPageRoute({required this.child})
       : super(
     pageBuilder: (context, animation, secondaryAnimation) => child,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      const begin = Offset(1.0, 0.0);
+      const begin = Offset(0.0, 1.0);
       const end = Offset.zero;
-      const curve = Curves.ease;
+      const curve = Curves.easeInOutCubic;
 
-      var tween = Tween(begin: begin, end: end).chain(
+      var slideTween = Tween(begin: begin, end: end).chain(
         CurveTween(curve: curve),
       );
 
+      var fadeTween = Tween(begin: 0.0, end: 1.0);
+      var scaleTween = Tween(begin: 0.95, end: 1.0);
+
       return SlideTransition(
-        position: animation.drive(tween),
+        position: animation.drive(slideTween),
+        child: FadeTransition(
+          opacity: animation.drive(fadeTween),
+          child: ScaleTransition(
+            scale: animation.drive(scaleTween),
+            child: child,
+          ),
+        ),
+      );
+    },
+    transitionDuration: const Duration(milliseconds: 400),
+  );
+}
+
+class FadePageRoute<T> extends PageRouteBuilder<T> {
+  final Widget child;
+
+  FadePageRoute({required this.child})
+      : super(
+    pageBuilder: (context, animation, secondaryAnimation) => child,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(
+        opacity: animation,
         child: child,
       );
     },

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -13,46 +14,20 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic> _userSettings = {
-    'name': 'Lyhuor',
-    'email': 'lyhuor@example.com',
-    'phone': '+855 12 345 678',
-    'currency': 'USD',
+    'name': 'User',
     'profileImage': null,
-    'notifications': true,
-    'faceId': false,
-    'darkMode': false,
-    'autoBackup': true,
   };
 
-  bool _showEditModal = false;
-  bool _showCurrencyModal = false;
-  bool _showExportModal = false;
-  bool _showClearDataModal = false;
-  bool _showHelpModal = false;
-  bool _showAboutModal = false;
-  String _editField = '';
-  String _editValue = '';
-  bool _loading = false;
-
-  final Map<String, Color> _colors = {
-    'PRIMARY': const Color(0xFF2C3E50),
-    'SECONDARY': const Color(0xFF999999),
-    'BACKGROUND': const Color(0xFFFEFEFF),
-    'CARD_BG': const Color(0xFFF8F8FA),
-    'BLUE': const Color(0xFF007AFF),
-    'GREEN': const Color(0xFFB6DBAD),
-    'RED': const Color(0xFFFEB8A8),
-    'WHITE': const Color(0xFFFFFFFF),
-  };
-
-  final List<Map<String, String>> _currencies = [
-    {'code': 'USD', 'symbol': '\$', 'name': 'US Dollar'},
-    {'code': 'EUR', 'symbol': '€', 'name': 'Euro'},
-    {'code': 'KHR', 'symbol': '៛', 'name': 'Cambodian Riel'},
-    {'code': 'GBP', 'symbol': '£', 'name': 'British Pound'},
-    {'code': 'JPY', 'symbol': '¥', 'name': 'Japanese Yen'},
-    {'code': 'CNY', 'symbol': '¥', 'name': 'Chinese Yuan'},
-  ];
+  // Colors
+  final Color _primaryColor = const Color(0xFF2C3E50);
+  final Color _secondaryColor = const Color(0xFF999999);
+  final Color _accentColor = const Color(0xFF007AFF);
+  final Color _backgroundColor = const Color(0xFFFEFEFF);
+  final Color _surfaceColor = const Color(0xFFFFFFFF);
+  final Color _cardColor = const Color(0xFFF8F8FA);
+  final Color _borderColor = const Color(0xFFF0F0F0);
+  final Color _successColor = const Color(0xFF4CAF50);
+  final Color _incomeColor = const Color(0xFFB6DBAD);
 
   final ImagePicker _picker = ImagePicker();
   final TextEditingController _editController = TextEditingController();
@@ -74,41 +49,141 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return initials.isNotEmpty ? initials : 'U';
   }
 
-  Future<bool> _requestPermissions() async {
-    return true; // Permissions are handled automatically by image_picker in Flutter
-  }
-
   Future<void> _pickImage() async {
-    final hasPermission = await _requestPermissions();
-    if (!hasPermission) return;
-
     showModalBottomSheet(
       context: context,
+      backgroundColor: Colors.transparent,
       builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: _surfaceColor,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-              leading: const Icon(Icons.camera_alt),
-              title: const Text('Camera'),
-              onTap: () {
-                Navigator.pop(context);
-                _openCamera();
-              },
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: _borderColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-            ListTile(
-              leading: const Icon(Icons.photo_library),
-              title: const Text('Photo Library'),
-              onTap: () {
-                Navigator.pop(context);
-                _openImageLibrary();
-              },
+            const SizedBox(height: 24),
+            Text(
+              'Change Profile Photo',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: _primaryColor,
+              ),
             ),
-            ListTile(
-              leading: const Icon(Icons.cancel),
-              title: const Text('Cancel'),
-              onTap: () => Navigator.pop(context),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildImagePickerOption(
+                    icon: Icons.camera_alt_outlined,
+                    label: 'Camera',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _openCamera();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildImagePickerOption(
+                    icon: Icons.photo_library_outlined,
+                    label: 'Gallery',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _openImageLibrary();
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(
+                    color: _secondaryColor,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImagePickerOption({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: _cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _borderColor),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: _accentColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                icon,
+                color: _accentColor,
+                size: 24,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: _primaryColor,
+              ),
             ),
           ],
         ),
@@ -120,7 +195,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final XFile? image = await _picker.pickImage(
       source: ImageSource.camera,
       imageQuality: 80,
-      preferredCameraDevice: CameraDevice.rear,
     );
     if (image != null) {
       final newSettings = {..._userSettings, 'profileImage': image.path};
@@ -149,8 +223,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
       }
     } catch (error) {
-      // ignore: avoid_print
-      print('Error loading user settings: $error');
+      debugPrint('Error loading user settings: $error');
     }
   }
 
@@ -162,163 +235,136 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _userSettings = newSettings;
       });
     } catch (error) {
-      // ignore: avoid_print
-      print('Error saving user settings: $error');
+      debugPrint('Error saving user settings: $error');
     }
   }
 
-  void _handleEditField(String field, String currentValue) {
-    setState(() {
-      _editField = field;
-      _editValue = currentValue;
-      _editController.text = currentValue;
-      _showEditModal = true;
-    });
-  }
+  void _showEditModal() {
+    _editController.text = _userSettings['name'];
 
-  void _handleSaveEdit() {
-    if (_editValue.trim().isNotEmpty) {
-      final newSettings = {..._userSettings, _editField: _editValue.trim()};
-      _saveUserSettings(newSettings);
-      setState(() {
-        _showEditModal = false;
-        _editField = '';
-        _editValue = '';
-        _editController.clear();
-      });
-    }
-  }
-
-  void _handleToggleSetting(String setting) {
-    final newSettings = {..._userSettings, setting: !_userSettings[setting]};
-    _saveUserSettings(newSettings);
-  }
-
-  void _handleSelectCurrency(Map<String, String> currency) {
-    final newSettings = {..._userSettings, 'currency': currency['code']};
-    _saveUserSettings(newSettings);
-    setState(() => _showCurrencyModal = false);
-  }
-
-  Future<void> _handleExportData() async {
-    setState(() => _loading = true);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final transactions = prefs.getString('transactions');
-      if (transactions != null) {
-        await Future.delayed(const Duration(seconds: 2));
-        setState(() {
-          _loading = false;
-          _showExportModal = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Export Successful: Data prepared for download.')),
-        );
-      } else {
-        setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No Data: No transaction data found to export.')),
-        );
-      }
-    } catch (error) {
-      setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error: Failed to export data.')),
-      );
-    }
-  }
-
-  Future<void> _handleClearData() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
-      setState(() {
-        _showClearDataModal = false;
-        _userSettings = {
-          'name': 'Lyhuor',
-          'email': 'lyhuor@example.com',
-          'phone': '+855 12 345 678',
-          'currency': 'USD',
-          'profileImage': null,
-          'notifications': true,
-          'faceId': false,
-          'darkMode': false,
-          'autoBackup': true,
-        };
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Success: All data has been cleared.')),
-      );
-    } catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error: Failed to clear data.')),
-      );
-    }
-  }
-
-  Widget _buildProfileItem({
-    required String icon,
-    required String title,
-    String? subtitle,
-    VoidCallback? onTap,
-    Widget? rightElement,
-    bool showArrow = true,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        margin: const EdgeInsets.only(bottom: 8),
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        margin: const EdgeInsets.all(16),
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 24,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        ),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          color: _surfaceColor,
+          borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              offset: const Offset(0, 1),
-              blurRadius: 2,
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
             ),
           ],
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 24),
+              decoration: BoxDecoration(
+                color: _borderColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Text(
+              'Edit Name',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: _primaryColor,
+              ),
+            ),
+            const SizedBox(height: 24),
+            TextField(
+              controller: _editController,
+              style: TextStyle(
+                fontSize: 16,
+                color: _primaryColor,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Enter your name',
+                hintStyle: TextStyle(color: _secondaryColor),
+                filled: true,
+                fillColor: _cardColor,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: _borderColor),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: _borderColor),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: _accentColor, width: 2),
+                ),
+                contentPadding: const EdgeInsets.all(16),
+              ),
+            ),
+            const SizedBox(height: 24),
             Row(
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: _colors['CARD_BG'],
-                    borderRadius: BorderRadius.circular(10),
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: _borderColor),
+                      ),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: _secondaryColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                   ),
-                  child: Center(child: Text(icon, style: const TextStyle(fontSize: 18))),
                 ),
                 const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(fontSize: 16, color: _colors['PRIMARY']),
-                    ),
-                    if (subtitle != null)
-                      Text(
-                        subtitle,
-                        style: TextStyle(fontSize: 14, color: _colors['SECONDARY']),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      final newName = _editController.text.trim();
+                      if (newName.isNotEmpty) {
+                        final newSettings = {..._userSettings, 'name': newName};
+                        _saveUserSettings(newSettings);
+                      }
+                      Navigator.pop(context);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _accentColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                  ],
-                ),
-              ],
-            ),
-            Row(
-              children: [
-                if (rightElement != null) rightElement,
-                if (showArrow)
-                  Text(
-                    '›',
-                    style: TextStyle(fontSize: 20, color: _colors['SECONDARY']),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Save',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
+                ),
               ],
             ),
           ],
@@ -327,108 +373,345 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _showCustomModal({
-    required String title,
-    required Widget content,
-    bool showActions = true,
-    VoidCallback? onConfirm,
-    String confirmText = 'Save',
-    bool isDanger = false,
-  }) {
+  void _showChangePinModal() {
+    String newPin = '';
+    bool isLoading = false;
+
     showModalBottomSheet(
       context: context,
+      backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.5,
-        minChildSize: 0.3,
-        maxChildSize: 0.9,
-        expand: false,
-        builder: (context, scrollController) => Container(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: TextStyle(fontSize: 20, color: _colors['PRIMARY']),
-                    ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            margin: const EdgeInsets.all(16),
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              top: 24,
+              left: 24,
+              right: 24,
+            ),
+            decoration: BoxDecoration(
+              color: _surfaceColor,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: _borderColor,
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      width: 30,
-                      height: 30,
+                ),
+                Text(
+                  'Set New PIN',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: _primaryColor,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Enter a new 4-digit PIN code',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: _secondaryColor,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(4, (index) {
+                    final bool isFilled = index < newPin.length;
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      width: 16,
+                      height: 16,
                       decoration: BoxDecoration(
-                        color: _colors['CARD_BG'],
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      child: Center(
-                        child: Text(
-                          '✕',
-                          style: TextStyle(fontSize: 16, color: _colors['SECONDARY']),
+                        shape: BoxShape.circle,
+                        color: isFilled ? _accentColor : Colors.transparent,
+                        border: Border.all(
+                          color: isFilled ? _accentColor : _borderColor,
+                          width: 2,
                         ),
                       ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 48),
+                Column(
+                  children: [
+                    for (int row = 0; row < 3; row++) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          for (int col = 1; col <= 3; col++)
+                            _buildNumberButton(
+                              '${row * 3 + col}',
+                              onTap: () {
+                                if (newPin.length < 4 && !isLoading) {
+                                  HapticFeedback.selectionClick();
+                                  setModalState(() {
+                                    newPin += '${row * 3 + col}';
+                                  });
+                                }
+                              },
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildActionButton(
+                          icon: Icons.close,
+                          onTap: () => Navigator.pop(context),
+                        ),
+                        _buildNumberButton(
+                          '0',
+                          onTap: () {
+                            if (newPin.length < 4 && !isLoading) {
+                              HapticFeedback.selectionClick();
+                              setModalState(() {
+                                newPin += '0';
+                              });
+                            }
+                          },
+                        ),
+                        _buildActionButton(
+                          icon: Icons.backspace_outlined,
+                          onTap: () {
+                            if (newPin.isNotEmpty && !isLoading) {
+                              HapticFeedback.selectionClick();
+                              setModalState(() {
+                                newPin = newPin.substring(0, newPin.length - 1);
+                              });
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: newPin.length == 4 && !isLoading
+                        ? () async {
+                      setModalState(() {
+                        isLoading = true;
+                      });
+                      await Future.delayed(const Duration(milliseconds: 400));
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setString('pinCode', newPin);
+                      setModalState(() {
+                        isLoading = false;
+                      });
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Text('PIN changed successfully!'),
+                          backgroundColor: _successColor,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      );
+                    }
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _accentColor,
+                      disabledBackgroundColor: _accentColor.withOpacity(0.3),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: isLoading
+                        ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                        : const Text(
+                      'Confirm PIN',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildNumberButton(String number, {required VoidCallback onTap}) {
+    return Container(
+      width: 70,
+      height: 70,
+      decoration: BoxDecoration(
+        color: _surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Center(
+            child: Text(
+              number,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+                color: _primaryColor,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      width: 70,
+      height: 70,
+      decoration: BoxDecoration(
+        color: _surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Center(
+            child: Icon(
+              icon,
+              size: 24,
+              color: _secondaryColor,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingItem({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    Widget? trailing,
+    VoidCallback? onTap,
+    Color? iconColor,
+    Color? iconBgColor,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: _surfaceColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _borderColor),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: iconBgColor ?? _accentColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                icon,
+                color: iconColor ?? _accentColor,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: _primaryColor,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: _secondaryColor,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-              Expanded(
-                child: SingleChildScrollView(
-                  controller: scrollController,
-                  child: content,
-                ),
-              ),
-              if (showActions)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-                          decoration: BoxDecoration(
-                            color: _colors['CARD_BG'],
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            'Cancel',
-                            style: TextStyle(fontSize: 16, color: _colors['SECONDARY']),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: onConfirm,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-                          decoration: BoxDecoration(
-                            color: isDanger ? _colors['RED'] : _colors['BLUE'],
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            confirmText,
-                            style: const TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
+            ),
+            if (trailing != null) trailing,
+          ],
         ),
       ),
     );
@@ -437,678 +720,195 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _colors['BACKGROUND'],
+      backgroundColor: _backgroundColor,
       body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Text(
-                    'Profile',
-                    style: TextStyle(fontSize: 33, color: _colors['PRIMARY'], fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    'Manage your account',
-                    style: TextStyle(fontSize: 16, color: _colors['SECONDARY']),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Profile',
+                          style: TextStyle(fontSize: 33, color: Color(0xFF2C3E50)),
+                        ),
+                        Text(
+                          'Manage your account settings',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: _secondaryColor,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 32),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: _surfaceColor,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _borderColor),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      margin: const EdgeInsets.only(bottom: 30),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            offset: const Offset(0, 2),
-                            blurRadius: 8,
-                          ),
-                        ],
-                      ),
-                      child: Row(
+                    GestureDetector(
+                      onTap: _pickImage,
+                      child: Stack(
                         children: [
-                          GestureDetector(
-                            onTap: _pickImage,
-                            child: Stack(
-                              children: [
-                                Container(
-                                  width: 60,
-                                  height: 60,
-                                  decoration: BoxDecoration(
-                                    color: _colors['BLUE'],
-                                    borderRadius: BorderRadius.circular(30),
-                                  ),
-                                  child: _userSettings['profileImage'] != null
-                                      ? ClipRRect(
-                                    borderRadius: BorderRadius.circular(30),
-                                    child: Image.file(
-                                      File(_userSettings['profileImage']),
-                                      fit: BoxFit.cover,
-                                      width: 60,
-                                      height: 60,
-                                    ),
-                                  )
-                                      : Center(
-                                    child: Text(
-                                      _generateAvatar(_userSettings['name']),
-                                      style: const TextStyle(fontSize: 24, color: Colors.white),
-                                    ),
-                                  ),
-                                ),
-                                Positioned(
-                                  top: -5,
-                                  right: -5,
-                                  child: Container(
-                                    width: 24,
-                                    height: 24,
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
-                                      borderRadius: BorderRadius.circular(12),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.2),
-                                          offset: const Offset(0, 1),
-                                          blurRadius: 2,
-                                        ),
-                                      ],
-                                    ),
-                                    child: const Center(
-                                      child: Text('📷', style: TextStyle(fontSize: 12)),
-                                    ),
-                                  ),
-                                ),
-                                Positioned(
-                                  bottom: 2,
-                                  right: 2,
-                                  child: Container(
-                                    width: 16,
-                                    height: 16,
-                                    decoration: BoxDecoration(
-                                      color: _colors['GREEN'],
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: Colors.white, width: 2),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 15),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _userSettings['name'],
-                                  style: TextStyle(fontSize: 20, color: _colors['PRIMARY'], fontWeight: FontWeight.bold),
-                                ),
-                                Text(
-                                  _userSettings['email'],
-                                  style: TextStyle(fontSize: 14, color: _colors['SECONDARY']),
-                                ),
-                              ],
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: () => _handleEditField('name', _userSettings['name']),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: _colors['CARD_BG'],
-                                borderRadius: BorderRadius.circular(8),
+                          Container(
+                            width: 72,
+                            height: 72,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  _accentColor,
+                                  _accentColor.withOpacity(0.8),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
                               ),
+                              borderRadius: BorderRadius.circular(50),
+                            ),
+                            child: _userSettings['profileImage'] != null
+                                ? ClipRRect(
+                              borderRadius: BorderRadius.circular(50),
+                              child: Image.file(
+                                File(_userSettings['profileImage']),
+                                fit: BoxFit.cover,
+                                width: 72,
+                                height: 72,
+                              ),
+                            )
+                                : Center(
                               child: Text(
-                                'Edit',
-                                style: TextStyle(fontSize: 14, color: _colors['BLUE']),
+                                _generateAvatar(_userSettings['name']),
+                                style: const TextStyle(
+                                  fontSize: 28,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: -2,
+                            right: -2,
+                            child: Container(
+                              width: 28,
+                              height: 28,
+                              decoration: BoxDecoration(
+                                color: _surfaceColor,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: _borderColor, width: 2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                Icons.camera_alt_outlined,
+                                color: _secondaryColor,
+                                size: 14,
                               ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 30),
+                    const SizedBox(width: 20),
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Personal Information',
-                            style: TextStyle(fontSize: 18, color: _colors['PRIMARY'], fontWeight: FontWeight.bold),
+                            _userSettings['name'],
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: _primaryColor,
+                            ),
                           ),
-                          const SizedBox(height: 15),
-                          _buildProfileItem(
-                            icon: '📧',
-                            title: 'Email',
-                            subtitle: _userSettings['email'],
-                            onTap: () => _handleEditField('email', _userSettings['email']),
-                          ),
-                          _buildProfileItem(
-                            icon: '📱',
-                            title: 'Phone',
-                            subtitle: _userSettings['phone'],
-                            onTap: () => _handleEditField('phone', _userSettings['phone']),
-                          ),
-                          _buildProfileItem(
-                            icon: '💰',
-                            title: 'Currency',
-                            subtitle:
-                            '${_userSettings['currency']} (${_currencies.firstWhere((c) => c['code'] == _userSettings['currency'], orElse: () => {'symbol': '\$'})['symbol']})',
-                            onTap: () => setState(() => _showCurrencyModal = true),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 30),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Security',
-                            style: TextStyle(fontSize: 18, color: _colors['PRIMARY'], fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 15),
-                          _buildProfileItem(
-                            icon: '🔒',
-                            title: 'Face ID / Touch ID',
-                            subtitle: 'Secure app access',
-                            rightElement: Switch(
-                              value: _userSettings['faceId'],
-                              onChanged: (value) => _handleToggleSetting('faceId'),
-                              activeColor: _colors['GREEN'],
-                              inactiveTrackColor: const Color(0xFFF0F0F0),
-                              thumbColor: WidgetStateProperty.resolveWith<Color>(
-                                    (states) => _userSettings['faceId'] ? Colors.white : const Color(0xFFF4F3F4),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _incomeColor.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'Active',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _successColor,
                               ),
                             ),
-                            showArrow: false,
-                          ),
-                          _buildProfileItem(
-                            icon: '🔑',
-                            title: 'Change Password',
-                            subtitle: 'Update your password',
-                            onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Password change functionality would be implemented here.')),
-                            ),
                           ),
                         ],
                       ),
                     ),
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 30),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'App Settings',
-                            style: TextStyle(fontSize: 18, color: _colors['PRIMARY'], fontWeight: FontWeight.bold),
+                    GestureDetector(
+                      onTap: _showEditModal,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _accentColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Edit',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: _accentColor,
                           ),
-                          const SizedBox(height: 15),
-                          _buildProfileItem(
-                            icon: '🔔',
-                            title: 'Notifications',
-                            subtitle: 'Push notifications',
-                            rightElement: Switch(
-                              value: _userSettings['notifications'],
-                              onChanged: (value) => _handleToggleSetting('notifications'),
-                              activeColor: _colors['GREEN'],
-                              inactiveTrackColor: const Color(0xFFF0F0F0),
-                              thumbColor: WidgetStateProperty.resolveWith<Color>(
-                                    (states) => _userSettings['notifications'] ? Colors.white : const Color(0xFFF4F3F4),
-                              ),
-                            ),
-                            showArrow: false,
-                          ),
-                          _buildProfileItem(
-                            icon: '🌙',
-                            title: 'Dark Mode',
-                            subtitle: 'Coming soon',
-                            rightElement: Switch(
-                              value: _userSettings['darkMode'],
-                              onChanged: (value) {},
-                              activeColor: _colors['GREEN'],
-                              inactiveTrackColor: const Color(0xFFF0F0F0),
-                              thumbColor: WidgetStateProperty.resolveWith<Color>(
-                                    (states) => _userSettings['darkMode'] ? Colors.white : const Color(0xFFF4F3F4),
-                              ),
-                              inactiveThumbColor: const Color(0xFFF4F3F4),
-                            ),
-                            showArrow: false,
-                          ),
-                          _buildProfileItem(
-                            icon: '☁️',
-                            title: 'Auto Backup',
-                            subtitle: 'Backup data automatically',
-                            rightElement: Switch(
-                              value: _userSettings['autoBackup'],
-                              onChanged: (value) => _handleToggleSetting('autoBackup'),
-                              activeColor: _colors['GREEN'],
-                              inactiveTrackColor: const Color(0xFFF0F0F0),
-                              thumbColor: WidgetStateProperty.resolveWith<Color>(
-                                    (states) => _userSettings['autoBackup'] ? Colors.white : const Color(0xFFF4F3F4),
-                              ),
-                            ),
-                            showArrow: false,
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 30),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Data & Storage',
-                            style: TextStyle(fontSize: 18, color: _colors['PRIMARY'], fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 15),
-                          _buildProfileItem(
-                            icon: '📤',
-                            title: 'Export Data',
-                            subtitle: 'Download your data',
-                            onTap: () => setState(() => _showExportModal = true),
-                          ),
-                          _buildProfileItem(
-                            icon: '🗑️',
-                            title: 'Clear All Data',
-                            subtitle: 'Reset app data',
-                            onTap: () => setState(() => _showClearDataModal = true),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 30),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Support & About',
-                            style: TextStyle(fontSize: 18, color: _colors['PRIMARY'], fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 15),
-                          _buildProfileItem(
-                            icon: '❓',
-                            title: 'Help & Support',
-                            subtitle: 'Get help',
-                            onTap: () => setState(() => _showHelpModal = true),
-                          ),
-                          _buildProfileItem(
-                            icon: '⭐',
-                            title: 'Rate App',
-                            subtitle: 'Rate us on App Store',
-                            onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Thank you for your feedback!')),
-                            ),
-                          ),
-                          _buildProfileItem(
-                            icon: 'ℹ️',
-                            title: 'About',
-                            subtitle: 'Version 1.0.0',
-                            onTap: () => setState(() => _showAboutModal = true),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
                   ],
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 32),
+              Text(
+                'Security',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: _primaryColor,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _buildSettingItem(
+                icon: Icons.pin_outlined,
+                title: 'Change PIN Code',
+                subtitle: 'Update your app access PIN',
+                iconColor: _accentColor,
+                iconBgColor: _accentColor.withOpacity(0.1),
+                trailing: Icon(Icons.chevron_right, color: _secondaryColor),
+                onTap: _showChangePinModal,
+              ),
+            ],
+          ),
         ),
       ),
     );
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_showEditModal) {
-      _showCustomModal(
-        title: 'Edit ${_editField[0].toUpperCase()}${_editField.substring(1)}',
-        content: Column(
-          children: [
-            TextField(
-              controller: _editController,
-              onChanged: (value) => setState(() => _editValue = value),
-              decoration: InputDecoration(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFFF0F0F0)),
-                ),
-                filled: true,
-                fillColor: _colors['CARD_BG'],
-                contentPadding: const EdgeInsets.all(12),
-                hintText: 'Enter $_editField',
-              ),
-              keyboardType: _editField == 'phone'
-                  ? TextInputType.phone
-                  : _editField == 'email'
-                  ? TextInputType.emailAddress
-                  : TextInputType.text,
-              textCapitalization: _editField == 'name' ? TextCapitalization.words : TextCapitalization.none,
-              style: const TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
-        onConfirm: _handleSaveEdit,
-      );
-    } else if (_showCurrencyModal) {
-      _showCustomModal(
-        title: 'Select Currency',
-        content: Container(
-          constraints: const BoxConstraints(maxHeight: 300),
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: _currencies.length,
-            itemBuilder: (context, index) {
-              final currency = _currencies[index];
-              return GestureDetector(
-                onTap: () => _handleSelectCurrency(currency),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: _userSettings['currency'] == currency['code']
-                        ? const Color(0xFFE8F4FD)
-                        : _colors['CARD_BG'],
-                    borderRadius: BorderRadius.circular(8),
-                    border: _userSettings['currency'] == currency['code']
-                        ? Border.all(color: _colors['BLUE']!)
-                        : null,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          SizedBox(
-                            width: 40,
-                            child: Text(
-                              currency['symbol']!,
-                              style: const TextStyle(fontSize: 24),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                currency['code']!,
-                                style: TextStyle(fontSize: 16, color: _colors['PRIMARY'], fontWeight: FontWeight.bold),
-                              ),
-                              Text(
-                                currency['name']!,
-                                style: TextStyle(fontSize: 14, color: _colors['SECONDARY']),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      if (_userSettings['currency'] == currency['code'])
-                        Text(
-                          '✓',
-                          style: TextStyle(fontSize: 18, color: _colors['BLUE'], fontWeight: FontWeight.bold),
-                        ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        showActions: false,
-      );
-    } else if (_showExportModal) {
-      _showCustomModal(
-        title: 'Export Data',
-        content: Column(
-          children: [
-            const Text(
-              '📤',
-              style: TextStyle(fontSize: 48),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'This will export all your transaction data, categories, and settings to a downloadable file.',
-              style: TextStyle(fontSize: 16, color: const Color(0xFF666666), height: 1.375),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            if (_loading)
-              Column(
-                children: [
-                  const CircularProgressIndicator(color: Color(0xFF007AFF)),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Preparing your data...',
-                    style: TextStyle(fontSize: 16, color: _colors['SECONDARY']),
-                  ),
-                ],
-              ),
-          ],
-        ),
-        onConfirm: _handleExportData,
-        confirmText: 'Export',
-      );
-    } else if (_showClearDataModal) {
-      _showCustomModal(
-        title: 'Clear All Data',
-        content: Column(
-          children: [
-            const Text(
-              '⚠️',
-              style: TextStyle(fontSize: 48),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Are you sure?',
-              style: TextStyle(fontSize: 18, color: _colors['PRIMARY'], fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'This will permanently delete all your transactions, categories, and settings. This action cannot be undone.',
-              style: TextStyle(fontSize: 16, color: const Color(0xFF666666), height: 1.375),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
-        onConfirm: _handleClearData,
-        confirmText: 'Clear Data',
-        isDanger: true,
-      );
-    } else if (_showHelpModal) {
-      _showCustomModal(
-        title: 'Help & Support',
-        content: Column(
-          children: [
-            const Text(
-              '💬',
-              style: TextStyle(fontSize: 48),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
-                color: _colors['CARD_BG'],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '📧 Email Support',
-                    style: TextStyle(fontSize: 16, color: _colors['PRIMARY'], fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    'support@moneymanager.com',
-                    style: TextStyle(fontSize: 14, color: const Color(0xFF666666)),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
-                color: _colors['CARD_BG'],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '💬 Live Chat',
-                    style: TextStyle(fontSize: 16, color: _colors['PRIMARY'], fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    'Available 24/7 for instant help',
-                    style: TextStyle(fontSize: 14, color: const Color(0xFF666666)),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
-                color: _colors['CARD_BG'],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '📚 FAQ',
-                    style: TextStyle(fontSize: 16, color: _colors['PRIMARY'], fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    'Find answers to common questions',
-                    style: TextStyle(fontSize: 14, color: const Color(0xFF666666)),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-                decoration: BoxDecoration(
-                  color: _colors['BLUE'],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                alignment: Alignment.center,
-                child: const Text(
-                  'Contact Support',
-                  style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          ],
-        ),
-        showActions: false,
-      );
-    } else if (_showAboutModal) {
-      _showCustomModal(
-        title: 'About Money Manager',
-        content: Column(
-          children: [
-            const Text(
-              '💰',
-              style: TextStyle(fontSize: 48),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Money Manager',
-              style: TextStyle(fontSize: 24, color: _colors['PRIMARY'], fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            Text(
-              'Version 1.0.0',
-              style: TextStyle(fontSize: 16, color: const Color(0xFF666666)),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'A simple and intuitive way to track your expenses and manage your finances. Built with Flutter for the best mobile experience.',
-              style: TextStyle(fontSize: 16, color: const Color(0xFF666666), height: 1.375),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
-                  '• Track income and expenses',
-                  style: TextStyle(fontSize: 14, color: Color(0xFF666666)),
-                ),
-                SizedBox(height: 6),
-                Text(
-                  '• Categorize transactions',
-                  style: TextStyle(fontSize: 14, color: Color(0xFF666666)),
-                ),
-                SizedBox(height: 6),
-                Text(
-                  '• Visual reports and analytics',
-                  style: TextStyle(fontSize: 14, color: Color(0xFF666666)),
-                ),
-                SizedBox(height: 6),
-                Text(
-                  '• Data backup and export',
-                  style: TextStyle(fontSize: 14, color: Color(0xFF666666)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Text(
-              '© 2025 Money Manager. All rights reserved.',
-              style: TextStyle(fontSize: 12, color: _colors['SECONDARY']),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-                decoration: BoxDecoration(
-                  color: _colors['BLUE'],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                alignment: Alignment.center,
-                child: const Text(
-                  'Close',
-                  style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          ],
-        ),
-        showActions: false,
-      );
-    }
   }
 }
