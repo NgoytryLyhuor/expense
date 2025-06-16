@@ -145,7 +145,7 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
     if (colorString == null || colorString.isEmpty) {
       return _generateLightColor();
     }
-
+ 
     try {
       // Remove any leading '#' if present
       String cleanColor = colorString.replaceAll('#', '');
