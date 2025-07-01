@@ -2,37 +2,32 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// Main widget class - this creates the Add Expense screen
 class AddExpenseScreen extends StatefulWidget {
-  const AddExpenseScreen({super.key});
+  final Map<String, dynamic>? transaction;
+
+  const AddExpenseScreen({super.key, this.transaction});
 
   @override
   _AddExpenseScreenState createState() => _AddExpenseScreenState();
 }
 
-// State class - this holds all the data and functions for the screen
 class _AddExpenseScreenState extends State<AddExpenseScreen> {
+  String _amount = '';
+  String _category = 'Food';
+  String _currency = 'KHR';
+  String _transactionType = 'Expense';
+  String _note = '';
+  String? _transactionId;
 
-  // VARIABLES - These store the user's input data
-  String _amount = '';                    // Stores the amount user types
-  String _category = 'Food';              // Currently selected category
-  String _currency = 'USD';               // Currently selected currency (USD or KHR)
-  String _transactionType = 'Expense';    // Either 'Expense' or 'Income'
-  String _note = '';                      // Optional note from user
+  bool _showSuccess = false;
+  Map<String, dynamic>? _successData;
 
-  // SUCCESS POPUP VARIABLES
-  bool _showSuccess = false;              // Controls if success popup is visible
-  Map<String, dynamic>? _successData;     // Stores data to show in success popup
-
-  // CONTROLLERS - These connect to text input fields
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
 
-  // FOCUS NODES - These control which text field is currently active
   final FocusNode _amountFocusNode = FocusNode();
   final FocusNode _noteFocusNode = FocusNode();
 
-  // CATEGORY LIST - All available expense categories with their icons and colors
   final List<Map<String, dynamic>> _categories = [
     {'name': 'Food', 'emoji': '🍽️', 'bgColor': const Color(0xFFFFF3E0)},
     {'name': 'Shopping', 'emoji': '🛍️', 'bgColor': const Color(0xFFF3E5F5)},
@@ -44,14 +39,29 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     {'name': 'Other', 'emoji': '📋', 'bgColor': const Color(0xFFF8F8FA)},
   ];
 
-  // CURRENCY AND TRANSACTION TYPE OPTIONS
   final List<String> _currencies = ['USD', 'KHR'];
   final List<String> _transactionTypes = ['Expense', 'Income'];
 
-  // CLEANUP FUNCTION - Called when screen is destroyed
+  bool get _isEditMode => widget.transaction != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isEditMode) {
+      final transaction = widget.transaction!;
+      _transactionId = transaction['id'];
+      _amount = transaction['amount'].abs().toStringAsFixed(2);
+      _category = transaction['type'] == 'income' ? 'Income' : transaction['category'];
+      _currency = transaction['currency'] ?? 'USD';
+      _transactionType = transaction['type'] == 'income' ? 'Income' : 'Expense';
+      _note = transaction['note'] ?? '';
+      _amountController.text = _amount;
+      _noteController.text = _note;
+    }
+  }
+
   @override
   void dispose() {
-    // Clean up controllers and focus nodes to prevent memory leaks
     _amountController.dispose();
     _noteController.dispose();
     _amountFocusNode.dispose();
@@ -59,45 +69,42 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     super.dispose();
   }
 
-  // SAVE TRANSACTION FUNCTION - Saves the transaction to phone storage
   Future<void> _saveTransaction(Map<String, dynamic> newTransaction) async {
     try {
       print('Saving transaction: $newTransaction');
-
-      // Get access to phone's local storage
       final prefs = await SharedPreferences.getInstance();
-
-      // Get existing transactions from storage (if any)
       final storedTransactions = prefs.getString('transactions');
       List<dynamic> transactions = [];
 
-      // If there are existing transactions, decode them from JSON
       if (storedTransactions != null && storedTransactions.isNotEmpty) {
         try {
           transactions = jsonDecode(storedTransactions) as List;
         } catch (e) {
           print('Error reading existing transactions: $e');
-          transactions = []; // Start fresh if data is corrupted
+          transactions = [];
         }
       }
 
-      // Add the new transaction to the list
-      transactions.add(newTransaction);
+      if (_isEditMode) {
+        final index = transactions.indexWhere((t) => t['id'] == _transactionId);
+        if (index != -1) {
+          transactions[index] = newTransaction;
+        } else {
+          transactions.add(newTransaction);
+        }
+      } else {
+        transactions.add(newTransaction);
+      }
 
-      // Save the updated list back to storage as JSON
       final transactionsJson = jsonEncode(transactions);
       await prefs.setString('transactions', transactionsJson);
-
-      print('Transaction saved successfully!');
-
+      print('Transaction ${_isEditMode ? 'updated' : 'saved'} successfully!');
     } catch (error) {
       print('Error saving transaction: $error');
-
-      // Show error message to user
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error saving transaction: $error'),
+            content: Text('Error ${_isEditMode ? 'updating' : 'saving'} transaction: $error'),
             backgroundColor: Colors.red,
           ),
         );
@@ -105,34 +112,25 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     }
   }
 
-  // GET CURRENT CATEGORY FUNCTION - Returns the currently selected category data
   Map<String, dynamic> _getCurrentCategory() {
     return _categories.firstWhere(
-            (cat) => cat['name'] == _category,
-        orElse: () => _categories[0] // Default to first category if not found
+          (cat) => cat['name'] == _category,
+      orElse: () => _categories[0],
     );
   }
 
-  // FORMAT AMOUNT FUNCTION - Makes sure amount input is properly formatted
   String _formatAmount(String text) {
-    // Remove everything except numbers and decimal point
     final cleanText = text.replaceAll(RegExp(r'[^0-9.]'), '');
-
-    // Handle multiple decimal points
     final parts = cleanText.split('.');
     if (parts.length > 2) {
       return '${parts[0]}.${parts.sublist(1).join('')}';
     }
-
-    // Limit to 2 decimal places
     if (parts.length == 2 && parts[1].length > 2) {
       return '${parts[0]}.${parts[1].substring(0, 2)}';
     }
-
     return cleanText;
   }
 
-  // HANDLE AMOUNT CHANGE - Called when user types in amount field
   void _handleAmountChange(String text) {
     final formatted = _formatAmount(text);
     setState(() {
@@ -141,14 +139,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     });
   }
 
-  // HANDLE NOTE CHANGE - Called when user types in note field
   void _handleNoteChange(String text) {
     setState(() {
       _note = text;
     });
   }
 
-  // RESET FORM FUNCTION - Clears all input fields
   void _resetForm() {
     setState(() {
       _amount = '';
@@ -161,52 +157,47 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     _noteController.clear();
   }
 
-  // MAIN ADD FUNCTION - Called when user taps "Add" button
   void _handleAdd() async {
-    // First, dismiss any open keyboards
     FocusScope.of(context).unfocus();
 
-    // Check if amount is valid
     if (_amount.isEmpty || double.tryParse(_amount) == null || double.parse(_amount) <= 0) {
-      return; // Exit if amount is invalid
+      return;
     }
 
-    // Convert amount to double and handle currency conversion
     final amountValue = double.parse(_amount);
     final amountInUSD = _currency == 'KHR' ? amountValue / 4000 : amountValue;
     final finalAmount = _transactionType == 'Income' ? amountInUSD : -amountInUSD;
 
-    // Get current category data
     final currentCategory = _getCurrentCategory();
 
-    // Create transaction object with all the data
     final newTransaction = {
-      'id': DateTime.now().millisecondsSinceEpoch.toString(),
+      'id': _isEditMode ? _transactionId : DateTime.now().millisecondsSinceEpoch.toString(),
       'amount': finalAmount,
       'originalAmount': amountValue,
       'category': _transactionType == 'Income' ? 'Income' : _category,
+      'recipient': _transactionType == 'Income' ? 'Income' : _category,
       'categoryData': _transactionType == 'Income'
           ? {'name': 'Income', 'emoji': '💰', 'bgColor': 0xFFE8F5E8}
           : {
         'name': currentCategory['name'],
         'emoji': currentCategory['emoji'],
-        'bgColor': (currentCategory['bgColor'] as Color).value
+        'bgColor': (currentCategory['bgColor'] as Color).value,
       },
-      'date': DateTime.now().toIso8601String(),
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
+      'date': _isEditMode ? widget.transaction!['date'] : DateTime.now().toIso8601String(),
+      'timestamp': _isEditMode
+          ? widget.transaction!['timestamp'] ?? DateTime.now().millisecondsSinceEpoch
+          : DateTime.now().millisecondsSinceEpoch,
       'icon': _transactionType == 'Income' ? '💰' : currentCategory['emoji'],
       'bgColor': _transactionType == 'Income'
           ? 'FFE8F5E8'
           : (currentCategory['bgColor'] as Color).value.toRadixString(16).substring(2).toUpperCase(),
       'currency': _currency,
-      'type': _transactionType,
+      'type': _transactionType.toLowerCase(),
       'note': _note,
     };
 
-    // Save the transaction
     await _saveTransaction(newTransaction);
 
-    // Store data for success popup
     _successData = {
       'amount': _amount,
       'currency': _currency,
@@ -215,54 +206,51 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       'note': _note,
     };
 
-    // Reset form and show success popup
-    _resetForm();
+    if (!_isEditMode) {
+      _resetForm();
+    }
+
     setState(() {
       _showSuccess = true;
     });
 
-    // Hide success popup after 3 seconds and go back to main screen
-    Future.delayed(const Duration(seconds: 5), () {
+    Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
         setState(() {
           _showSuccess = false;
           _successData = null;
         });
-        Navigator.pushReplacementNamed(context, '/main', arguments: {'selectedIndex': 0});
+        Navigator.pop(context, newTransaction);
       }
     });
   }
 
-  // HANDLE CATEGORY SELECT - Called when user picks a category
   void _handleCategorySelect(String categoryName) {
     setState(() {
       _category = categoryName;
     });
-    Navigator.pop(context); // Close the category selection popup
+    Navigator.pop(context);
   }
 
-  // HANDLE CURRENCY SELECT - Called when user picks USD or KHR
   void _handleCurrencySelect(String selectedCurrency) {
     setState(() {
       _currency = selectedCurrency;
-      _amount = ''; // Clear amount when currency changes
+      _amount = '';
     });
     _amountController.clear();
   }
 
-  // HANDLE TRANSACTION TYPE SELECT - Called when user picks Expense or Income
   void _handleTransactionTypeSelect(String type) {
     setState(() {
       _transactionType = type;
       if (type == 'Expense') {
-        _category = 'Food'; // Reset to default category for expenses
+        _category = 'Food';
       }
     });
   }
 
-  // SHOW CATEGORY POPUP - Shows the bottom sheet with category options
   void _showCategoryPopup() {
-    FocusScope.of(context).unfocus(); // Hide keyboard
+    FocusScope.of(context).unfocus();
 
     showModalBottomSheet(
       context: context,
@@ -276,7 +264,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Popup title
             const Text(
               'Select Category',
               style: TextStyle(
@@ -286,8 +273,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               ),
             ),
             const SizedBox(height: 16),
-
-            // List of category options
             ..._categories.map((cat) {
               final isSelected = _category == cat['name'];
               return GestureDetector(
@@ -302,7 +287,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     children: [
                       Row(
                         children: [
-                          // Category icon container
                           Container(
                             width: 40,
                             height: 40,
@@ -315,25 +299,23 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          // Category name
                           Text(
                             cat['name'],
                             style: const TextStyle(
-                                fontSize: 16,
-                                color: Color(0xFF2C3E50),
-                                fontWeight: FontWeight.w500
+                              fontSize: 16,
+                              color: Color(0xFF2C3E50),
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
                       ),
-                      // Checkmark for selected category
                       if (isSelected)
                         const Text(
                           '✓',
                           style: TextStyle(
-                              fontSize: 16,
-                              color: Color(0xFFB7DBAF),
-                              fontWeight: FontWeight.bold
+                            fontSize: 16,
+                            color: Color(0xFFB7DBAF),
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                     ],
@@ -347,69 +329,49 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     );
   }
 
-  // BUILD FUNCTION - This creates the visual layout of the screen
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // MAIN SCREEN LAYOUT
         Scaffold(
           backgroundColor: const Color(0xFFFEFEFF),
           body: SafeArea(
             child: Column(
               children: [
-                // TOP HEADER with back button and title
                 _buildHeader(),
-
-                // SCROLLABLE CONTENT AREA
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Amount input section
                         _buildAmountSection(),
-
-                        // Transaction type selection (Expense/Income)
                         _buildTransactionTypeSection(),
-
-                        // Category selection (only for expenses)
-                        if (_transactionType == 'Expense')
-                          _buildCategorySection(),
-
-                        // Note input section
+                        if (_transactionType == 'Expense') _buildCategorySection(),
                         _buildNoteSection(),
                       ],
                     ),
                   ),
                 ),
-
-                // BOTTOM ADD BUTTON
                 _buildAddButton(),
               ],
             ),
           ),
         ),
-
-        // SUCCESS POPUP (shown on top when transaction is added)
-        if (_showSuccess && _successData != null)
-          _buildSuccessPopup(),
+        if (_showSuccess && _successData != null) _buildSuccessPopup(),
       ],
     );
   }
 
-  // HEADER WIDGET - Top bar with back button and title
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Back button
           GestureDetector(
             onTap: () {
-              Navigator.pushReplacementNamed(context, '/main', arguments: {'selectedIndex': 0});
+              Navigator.pop(context);
             },
             child: Container(
               padding: const EdgeInsets.all(12),
@@ -424,32 +386,27 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               ),
             ),
           ),
-          // Screen title
-          const Text(
-            'Add Transaction',
-            style: TextStyle(fontSize: 33, color: Color(0xFF2C3E50)),
+          Text(
+            _isEditMode ? 'Edit Transaction' : 'Add Transaction',
+            style: const TextStyle(fontSize: 33, color: Color(0xFF2C3E50)),
           ),
-          const SizedBox(width: 48), // Balances the back button space
+          const SizedBox(width: 48),
         ],
       ),
     );
   }
 
-  // AMOUNT SECTION - Amount input field and currency selector
   Widget _buildAmountSection() {
     return Container(
       margin: const EdgeInsets.only(bottom: 30),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Section label
           const Text(
             'Amount',
             style: TextStyle(fontSize: 16, color: Color(0xFF999999)),
           ),
           const SizedBox(height: 12),
-
-          // Amount input field
           GestureDetector(
             onTap: () => FocusScope.of(context).requestFocus(_amountFocusNode),
             child: Container(
@@ -462,7 +419,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
-                  // Currency symbol
                   Text(
                     _currency == 'USD' ? '\$' : '៛',
                     style: const TextStyle(
@@ -472,7 +428,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  // Amount text field
                   Expanded(
                     child: TextFormField(
                       controller: _amountController,
@@ -498,8 +453,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             ),
           ),
           const SizedBox(height: 8),
-
-          // Currency selector (USD/KHR toggle)
           Container(
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
@@ -516,11 +469,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       color: _currency == curr ? Colors.white : Colors.transparent,
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: _currency == curr
-                          ? [BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        offset: const Offset(0, 1),
-                        blurRadius: 4,
-                      )]
+                          ? [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          offset: const Offset(0, 1),
+                          blurRadius: 4,
+                        )
+                      ]
                           : [],
                     ),
                     alignment: Alignment.center,
@@ -544,21 +499,17 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     );
   }
 
-  // TRANSACTION TYPE SECTION - Expense/Income selector
   Widget _buildTransactionTypeSection() {
     return Container(
       margin: const EdgeInsets.only(bottom: 30),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Section label
           const Text(
             'Transaction Type',
             style: TextStyle(fontSize: 16, color: Color(0xFF999999)),
           ),
           const SizedBox(height: 12),
-
-          // Toggle buttons for Expense/Income
           Container(
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
@@ -575,11 +526,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       color: _transactionType == type ? Colors.white : Colors.transparent,
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: _transactionType == type
-                          ? [BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        offset: const Offset(0, 1),
-                        blurRadius: 4,
-                      )]
+                          ? [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          offset: const Offset(0, 1),
+                          blurRadius: 4,
+                        )
+                      ]
                           : [],
                     ),
                     alignment: Alignment.center,
@@ -603,21 +556,17 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     );
   }
 
-  // CATEGORY SECTION - Category selector (only shown for expenses)
   Widget _buildCategorySection() {
     return Container(
       margin: const EdgeInsets.only(bottom: 30),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Section label
           const Text(
             'Category',
             style: TextStyle(fontSize: 16, color: Color(0xFF999999)),
           ),
           const SizedBox(height: 12),
-
-          // Category selection button
           GestureDetector(
             onTap: _showCategoryPopup,
             child: Container(
@@ -631,7 +580,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 children: [
                   Row(
                     children: [
-                      // Category icon
                       Container(
                         width: 40,
                         height: 40,
@@ -647,7 +595,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      // Category name
                       Text(
                         _category,
                         style: const TextStyle(
@@ -658,7 +605,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       ),
                     ],
                   ),
-                  // Dropdown arrow
                   const Text(
                     '⌄',
                     style: TextStyle(fontSize: 16, color: Color(0xFF999999)),
@@ -672,21 +618,17 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     );
   }
 
-  // NOTE SECTION - Optional note input field
   Widget _buildNoteSection() {
     return Container(
       margin: const EdgeInsets.only(bottom: 30),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Section label
           const Text(
             'Note (Optional)',
             style: TextStyle(fontSize: 16, color: Color(0xFF999999)),
           ),
           const SizedBox(height: 12),
-
-          // Note input field
           GestureDetector(
             onTap: () => FocusScope.of(context).requestFocus(_noteFocusNode),
             child: Container(
@@ -720,12 +662,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     );
   }
 
-  // ADD BUTTON - Bottom button to save the transaction
   Widget _buildAddButton() {
-    // Check if form is valid (amount is entered and valid)
-    final isFormValid = _amount.isNotEmpty &&
-        double.tryParse(_amount) != null &&
-        double.parse(_amount) > 0;
+    final isFormValid =
+        _amount.isNotEmpty && double.tryParse(_amount) != null && double.parse(_amount) > 0;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
@@ -737,15 +676,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            // Button color changes based on form validity
-            color: isFormValid
-                ? const Color(0xFFB7DBAF)  // Green when valid
-                : const Color(0xFFF8F8FA), // Gray when invalid
+            color: isFormValid ? const Color(0xFFB7DBAF) : const Color(0xFFF8F8FA),
             borderRadius: BorderRadius.circular(25),
           ),
           alignment: Alignment.center,
           child: Text(
-            'Add $_transactionType',
+            _isEditMode ? 'Update Transaction' : 'Add $_transactionType',
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -757,7 +693,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     );
   }
 
-// SUCCESS POPUP - Fixed version without yellow underlines
   Widget _buildSuccessPopup() {
     return Container(
       color: Colors.black.withOpacity(0.6),
@@ -781,7 +716,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Success icon
               Container(
                 width: 80,
                 height: 80,
@@ -809,42 +743,36 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     _successData!['type'] == 'Income' ? '💰' : '✅',
                     style: const TextStyle(
                       fontSize: 36,
-                      decoration: TextDecoration.none, // Fix: Remove any text decoration
+                      decoration: TextDecoration.none,
                     ),
                   ),
                 ),
               ),
               const SizedBox(height: 24),
-
-              // Success title
               Text(
-                '${_successData!['type']} Added Successfully!',
+                '${_successData!['type']} ${_isEditMode ? 'Updated' : 'Added'} Successfully!',
                 style: const TextStyle(
                   fontSize: 22,
                   color: Color(0xFF2C3E50),
                   fontWeight: FontWeight.w700,
                   height: 1.3,
-                  decoration: TextDecoration.none, // Fix: Remove any text decoration
+                  decoration: TextDecoration.none,
                 ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
-
-              // Subtitle
               Text(
-                'Your transaction has been saved',
+                'Your transaction has been ${_isEditMode ? 'updated' : 'saved'}',
                 style: TextStyle(
                   fontSize: 16,
                   color: const Color(0xFF2C3E50).withOpacity(0.6),
                   fontWeight: FontWeight.w400,
                   height: 1.4,
-                  decoration: TextDecoration.none, // Fix: Remove any text decoration
+                  decoration: TextDecoration.none,
                 ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
-
-              // Transaction details card
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
@@ -858,14 +786,13 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 ),
                 child: Column(
                   children: [
-                    // Amount
                     _buildDetailRow(
                       icon: '💵',
                       title: 'Amount',
-                      value: '${_successData!['currency'] == 'USD' ? '\$' : '៛'} ${double.parse(_successData!['amount']).toStringAsFixed(2)}',
+                      value:
+                      '${_successData!['currency'] == 'USD' ? '\$' : '៛'} ${double.parse(_successData!['amount']).toStringAsFixed(2)}',
                       isHighlighted: true,
                     ),
-
                     if (_successData!['type'] == 'Expense') ...[
                       const SizedBox(height: 16),
                       _buildDetailRow(
@@ -874,14 +801,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         value: _successData!['category'],
                       ),
                     ],
-
                     const SizedBox(height: 16),
                     _buildDetailRow(
                       icon: _successData!['type'] == 'Income' ? '📈' : '📉',
                       title: 'Type',
                       value: _successData!['type'],
                     ),
-
                     if (_successData!['note'] != null && _successData!['note'].isNotEmpty) ...[
                       const SizedBox(height: 16),
                       _buildDetailRow(
@@ -895,8 +820,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-
-              // Home button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -905,7 +828,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       _showSuccess = false;
                       _successData = null;
                     });
-                    Navigator.pushReplacementNamed(context, '/main', arguments: {'selectedIndex': 0});
+                    Navigator.pop(context);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFB7DBAF),
@@ -920,14 +843,14 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.home_rounded, size: 20),
+                      Icon(Icons.arrow_back_rounded, size: 20),
                       SizedBox(width: 8),
                       Text(
-                        'Go to Home',
+                        'Back to Transactions',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          decoration: TextDecoration.none, // Fix: Remove any text decoration
+                          decoration: TextDecoration.none,
                         ),
                       ),
                     ],
@@ -941,7 +864,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     );
   }
 
-// Fixed detail row widget without yellow underlines
   Widget _buildDetailRow({
     required String icon,
     required String title,
@@ -952,7 +874,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     return Row(
       crossAxisAlignment: isMultiline ? CrossAxisAlignment.start : CrossAxisAlignment.center,
       children: [
-        // Icon
         Container(
           width: 40,
           height: 40,
@@ -972,31 +893,26 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               icon,
               style: const TextStyle(
                 fontSize: 18,
-                decoration: TextDecoration.none, // Fix: Remove any text decoration
+                decoration: TextDecoration.none,
               ),
             ),
           ),
         ),
         const SizedBox(width: 12),
-
-        // Text content
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Title
               Text(
                 title,
                 style: const TextStyle(
                   fontSize: 13,
                   color: Color(0xFF6C757D),
                   fontWeight: FontWeight.w500,
-                  decoration: TextDecoration.none, // Fix: Remove any text decoration
+                  decoration: TextDecoration.none,
                 ),
               ),
               const SizedBox(height: 4),
-
-              // Value
               Text(
                 value,
                 style: TextStyle(
@@ -1004,7 +920,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   color: const Color(0xFF2C3E50),
                   fontWeight: isHighlighted ? FontWeight.w700 : FontWeight.w600,
                   height: 1.3,
-                  decoration: TextDecoration.none, // Fix: Remove any text decoration
+                  decoration: TextDecoration.none,
                 ),
                 maxLines: isMultiline ? 2 : 1,
                 overflow: TextOverflow.ellipsis,
@@ -1015,5 +931,4 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       ],
     );
   }
-
 }

@@ -7,8 +7,7 @@ import './views/transactions_screen.dart';
 import './views/add_expense_screen.dart';
 import './views/savings_screen.dart';
 import './views/profile_screen.dart';
-import 'auth_screen.dart';
-import './views/welcome_screen.dart'; // Add this import
+import './views/welcome_screen.dart';
 
 void main() {
   // Set system UI overlay style globally before running the app
@@ -32,45 +31,8 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
-  bool _isAuthenticated = false;
-  bool _hasBeenAuthenticated = false;
-  bool _needsReAuth = false;
-  bool _showWelcome = true; // Add this flag
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
-      if (_hasBeenAuthenticated) {
-        setState(() {
-          _needsReAuth = true;
-          _isAuthenticated = false;
-        });
-      }
-    }
-  }
-
-  void _onAuthenticationSuccess() {
-    setState(() {
-      _isAuthenticated = true;
-      _hasBeenAuthenticated = true;
-      _needsReAuth = false;
-    });
-  }
+class _MyAppState extends State<MyApp> {
+  bool _showWelcome = true;
 
   void _onWelcomeComplete() {
     setState(() {
@@ -112,9 +74,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       ),
       home: _showWelcome
           ? WelcomeScreen(onComplete: _onWelcomeComplete)
-          : (_isAuthenticated && !_needsReAuth
-          ? const MainTabNavigator()
-          : AuthScreen(onAuthSuccess: _onAuthenticationSuccess)),
+          : const MainTabNavigator(),
       routes: {
         '/main': (context) => const MainTabNavigator(),
       },
@@ -133,9 +93,9 @@ class CustomPageTransitionBuilder extends PageTransitionsBuilder {
       Animation<double> secondaryAnimation,
       Widget child,
       ) {
-    // Special transition for auth to home
+    // Special transition for welcome to home
     if (route.settings.name == '/main' || route is MaterialPageRoute) {
-      return AuthToHomeTransition(
+      return WelcomeToHomeTransition(
         animation: animation,
         child: child,
       );
@@ -149,11 +109,11 @@ class CustomPageTransitionBuilder extends PageTransitionsBuilder {
   }
 }
 
-class AuthToHomeTransition extends StatelessWidget {
+class WelcomeToHomeTransition extends StatelessWidget {
   final Animation<double> animation;
   final Widget child;
 
-  const AuthToHomeTransition({
+  const WelcomeToHomeTransition({
     super.key,
     required this.animation,
     required this.child,
